@@ -14,7 +14,7 @@
 
 ---
 
-Harness の中から Host マシンのファイルシステムを閲覧できます。種類・サイズ・更新日時付きのディレクトリ一覧、テキストファイルのプレビュー、フォルダ作成に対応しています。すべての読み取りは Host/Client Remote チャネルを通り、これはエージェント自身のファイルシステムツールが使うのと同じ境界です。ファイルはブラウザーにダウンロードでき、画像はインラインでプレビューできます。
+Harness の中から Host マシンのファイルシステムを閲覧できます。種類・サイズ・更新日時付きのディレクトリ一覧、テキストファイルのプレビュー、フォルダ作成に対応しています。すべての読み取りは Host/Client Remote チャネルを通り、これはエージェント自身のファイルシステムツールが使うのと同じ境界です。ファイルはブラウザーにダウンロードでき、画像はインラインでプレビューできます。 開いているディレクトリには、ファイルをアップロードできます。
 
 ![ホストファイルパネル](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Harness の中から Host マシンのファイルシステムを閲覧できま
 | パス移動 | 絶対パスへの移動、親ディレクトリへの移動、または HOME、tmp、cwd、ファイルシステムルートへのショートカット的使用 |
 | ファイルプレビュー | テキストファイルの先頭 256 KiB を読み取って描画する。バイナリファイルはノイズを出力する代わりに、バイナリであることを報告する |
 | フォルダ作成 | 現在のディレクトリ内に単一セグメントのサブディレクトリを作成する |
-| 多言語対応 UI | 画面に表示される文字列はすべて `ctx.locale` を経由するため、パネルは UI の言語設定に従う |
+| 多言語 UI | 見える文字列はすべて `ctx.locale` を通り、パネルは 12 言語を同梱して表示中の言語に追従する |
+| ファイルのアップロード | ブラウザーのファイルを開いているディレクトリへ、バイトを運ぶ 1 回の Remote 呼び出しとして送る |
 
 ## インストール
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### profile の依存関係として
 
-```jsonc
+```jsonc アップロードされたファイルは他のコマンドと同じ Remote チャネルを通ります。バイトはブラウザーのファイルルートではなく、その呼び出し自体に含まれます。
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 この plugin は標準の DSH bundle で、Host 半分と Client 半分から構成されています：
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | 1 回のダウンロードが運べる最大ファイルサイズ |
 
 `signal` は最後のパラメータでなければなりません。gateway はメソッドのシグネチャを `Function.prototype.toString()` で解析して wire パラメータを導出するため、シグネチャが壊れると呼び出しは失敗します。
@@ -122,7 +124,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ## 権限と境界
 
 - この plugin は **Harness プロセス自身の権限** で Host ファイルシステムを読み取ります。実行しているアカウントが読み取れるものはすべて読み取れます。これは Host ファイルエクスプローラーとして本質的な性質なので、信頼できるマシンとアカウントでのみ有効にしてください。
-- この plugin は **読み取り専用＋フォルダ作成** です。ファイルの作成、削除、名前変更、権限の変更はできません。
+- このプラグインは**読み取り専用で、フォルダーの作成とファイルのアップロードだけができます**。既存ファイルを書き換えたり削除したり名前を変更することはせず、アップロードが既存のファイルを置き換えることもありません。
 - 1 回の listing で返る項目は最大 2000 件、1 回の preview で読み取るのは最大 256 KiB です。
 - 1 回のダウンロードが運べるのは Harness の添付バイト上限（既定 20 MiB）までで、超える場合はパネルが先に理由を示します。
 

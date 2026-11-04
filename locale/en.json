@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Host file explorer",
-    "description": "A left-sidebar panel that browses the filesystem of the machine running this Harness: directory listings with file kinds and sizes, text previews, and folder creation."
+    "description": "A left-sidebar panel that browses the filesystem of the machine running this Harness: directory listings with kinds and sizes, text and image previews, downloads, uploads, and folder creation."
   }
 }

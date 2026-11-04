@@ -14,7 +14,7 @@
 
 ---
 
-Explora el sistema de archivos de la máquina del host desde dentro del Harness: listados de directorios con tipos, tamaños y horas de modificación, vistas previas de archivos de texto y creación de carpetas. Cada lectura pasa por el canal Remote Host/Client, el mismo límite que usan las propias herramientas de sistema de archivos del agente. Los archivos se pueden descargar al navegador y las imágenes se previsualizan en línea.
+Explora el sistema de archivos de la máquina del host desde dentro del Harness: listados de directorios con tipos, tamaños y horas de modificación, vistas previas de archivos de texto y creación de carpetas. Cada lectura pasa por el canal Remote Host/Client, el mismo límite que usan las propias herramientas de sistema de archivos del agente. Los archivos se pueden descargar al navegador y las imágenes se previsualizan en línea. Los archivos también se pueden subir al directorio abierto.
 
 ![Panel de archivos del host](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Explora el sistema de archivos de la máquina del host desde dentro del Harness:
 | Navegación por rutas | Ve a una ruta absoluta, al directorio superior o usa los atajos para HOME, tmp, cwd y la raíz del sistema de archivos |
 | Vista previa de archivos | Lee los primeros 256 KiB de un archivo de texto y lo representa; los archivos binarios se identifican en lugar de imprimir contenido ilegible |
 | Creación de carpetas | Crea un subdirectorio de un solo segmento dentro del directorio actual |
-| Interfaz bilingüe | Cada cadena visible pasa por `ctx.locale`, por lo que el panel sigue el idioma de la interfaz |
+| Interfaz multilingüe | Todo el texto visible pasa por `ctx.locale`; el panel incluye doce idiomas y sigue el idioma de la interfaz |
+| Subir archivo | Envía un archivo del navegador al directorio abierto, en una llamada Remote que lleva los bytes |
 
 ## Instalación
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Como dependencia de un perfil
 
-```jsonc
+```jsonc Un archivo subido recorre el canal Remote como cualquier otro comando: sus bytes viajan dentro de esa llamada, no por la ruta de archivos del navegador.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Tras la instalación aparece un **icono de carpeta** en la barra lateral, despu�
 El plugin es un bundle de DSH estándar con una mitad Host y una mitad Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ La **mitad Host** proporciona un servicio `ctx.hostFiles` y marca sus verbos par
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | El archivo más grande que puede transportar una descarga |
 
 `signal` tiene que ser el último parámetro: el gateway analiza la firma del método con `Function.prototype.toString()` para derivar los parámetros del cable, y una firma rota hace fallar la llamada.
@@ -122,7 +124,7 @@ La **mitad Client** escribe a mano una contribución Typert Remote, la monta con
 ## Permisos y límites
 
 - El plugin lee el sistema de archivos del host con los **privilegios del propio proceso del Harness**: puede leer todo lo que la cuenta que lo ejecuta puede leer. Eso es inherente a lo que es un explorador de archivos del host, así que actívalo solo en máquinas y cuentas de confianza.
-- El plugin es **de solo lectura más creación de carpetas**. No puede escribir archivos, borrar, renombrar ni cambiar permisos.
+- El plugin es **de solo lectura, además de crear carpetas y subir archivos**. No modifica, borra ni renombra un archivo que ya existe, y una subida nunca reemplaza uno.
 - Un listado devuelve como máximo 2000 entradas y una vista previa lee como máximo 256 KiB.
 - Una descarga transporta como máximo el límite de bytes de adjuntos del Harness (20 MiB por defecto); si se supera, el panel lo explica antes de empezar.
 

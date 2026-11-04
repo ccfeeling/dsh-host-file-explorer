@@ -14,7 +14,7 @@
 
 ---
 
-Duyệt hệ thống tệp của máy host từ bên trong Harness: danh sách thư mục kèm loại, kích thước và thời gian sửa đổi, xem trước tệp văn bản và tạo thư mục. Mọi lượt đọc đều đi qua kênh Host/Client Remote, cùng ranh giới mà các công cụ hệ thống tệp của chính agent sử dụng. Tệp có thể tải xuống trình duyệt, và hình ảnh được xem trước ngay tại chỗ.
+Duyệt hệ thống tệp của máy host từ bên trong Harness: danh sách thư mục kèm loại, kích thước và thời gian sửa đổi, xem trước tệp văn bản và tạo thư mục. Mọi lượt đọc đều đi qua kênh Host/Client Remote, cùng ranh giới mà các công cụ hệ thống tệp của chính agent sử dụng. Tệp có thể tải xuống trình duyệt, và hình ảnh được xem trước ngay tại chỗ. Tệp cũng có thể được tải lên thư mục đang mở.
 
 ![Bảng tệp máy chủ](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Duyệt hệ thống tệp của máy host từ bên trong Harness: danh sách t
 | Điều hướng đường dẫn | Nhảy đến một đường dẫn tuyệt đối, lên thư mục cha, hoặc dùng các phím tắt cho HOME, tmp, cwd và thư mục gốc của hệ thống tệp |
 | Xem trước tệp | Đọc 256 KiB đầu tiên của một tệp văn bản và hiển thị nội dung đó; tệp nhị phân sẽ báo rõ thay vì in ra dữ liệu rác |
 | Tạo thư mục | Tạo một thư mục con chỉ gồm một phần tên bên trong thư mục hiện tại |
-| Giao diện song ngữ | Mọi chuỗi hiển thị đều đi qua `ctx.locale`, nên bảng điều khiển bám theo ngôn ngữ của giao diện |
+| Giao diện đa ngôn ngữ | Mọi chuỗi hiển thị đều đi qua `ctx.locale`; bảng điều khiển có mười hai ngôn ngữ và theo ngôn ngữ của giao diện |
+| Tải tệp lên | Gửi một tệp từ trình duyệt tới thư mục đang mở, trong một lệnh Remote mang theo byte |
 
 ## Cài đặt
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Như một phụ thuộc của profile
 
-```jsonc
+```jsonc Tệp tải lên đi theo kênh Remote như mọi lệnh khác: byte của tệp nằm trong chính lệnh đó, chứ không đi qua tuyến tệp của trình duyệt.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Sau khi cài đặt, một **biểu tượng thư mục** xuất hiện trên th
 Plugin này là một bundle DSH tiêu chuẩn, gồm một nửa Host và một nửa Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | Kích thước tệp lớn nhất mà một lần tải xuống có thể mang |
 
 `signal` phải là tham số cuối cùng: gateway phân tích chữ ký của phương thức bằng `Function.prototype.toString()` để suy ra các tham số trên wire, và một chữ ký sai lệch sẽ khiến lời gọi thất bại.
@@ -122,7 +124,7 @@ Một câu trả lời bị giới hạn bởi giới hạn byte đính kèm c�
 ## Quyền hạn và ranh giới
 
 - Plugin đọc hệ thống tệp của host với **quyền của chính tiến trình Harness**: nó có thể đọc mọi thứ mà tài khoản đang chạy nó có quyền đọc. Điều này là đặc tính cố hữu của một trình duyệt tệp trên host, vì vậy chỉ hãy bật nó trên những máy và tài khoản mà bạn tin tưởng.
-- Plugin **chỉ đọc, cộng thêm tạo thư mục**. Nó không thể ghi tệp, xóa, đổi tên hay thay đổi quyền.
+- Plugin này **chỉ đọc, kèm tạo thư mục và tải tệp lên**. Nó không sửa, xóa hay đổi tên một tệp đã có, và một lần tải lên không bao giờ ghi đè tệp cũ.
 - Một lần liệt kê trả về nhiều nhất 2000 mục, và một lần xem trước đọc nhiều nhất 256 KiB.
 - Một lần tải xuống chỉ mang tối đa giới hạn byte đính kèm của Harness (mặc định 20 MiB); nếu vượt quá, bảng điều khiển sẽ nói rõ lý do trước.
 

@@ -14,7 +14,7 @@
 
 ---
 
-Przeglądaj system plików maszyny Host z wnętrza Harness: listy katalogów z rodzajami, rozmiarami i czasami modyfikacji, podgląd plików tekstowych oraz tworzenie folderów. Każdy odczyt przechodzi przez kanał Remote Host/Client — tę samą granicę, której używają własne narzędzia systemu plików agenta. Pliki można pobrać do przeglądarki, a obrazy wyświetlać w miejscu.
+Przeglądaj system plików maszyny Host z wnętrza Harness: listy katalogów z rodzajami, rozmiarami i czasami modyfikacji, podgląd plików tekstowych oraz tworzenie folderów. Każdy odczyt przechodzi przez kanał Remote Host/Client — tę samą granicę, której używają własne narzędzia systemu plików agenta. Pliki można pobrać do przeglądarki, a obrazy wyświetlać w miejscu. Pliki można też wgrać do otwartego katalogu.
 
 ![Пanel plików hosta](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Przeglądaj system plików maszyny Host z wnętrza Harness: listy katalogów z r
 | Nawigacja po ścieżkach | Przejdź do ścieżki bezwzględnej, wróć do katalogu nadrzędnego lub skorzystaj ze skrótów dla HOME, tmp, cwd i katalogu głównego systemu plików |
 | Podgląd pliku | Odczytuje pierwsze 256 KiB pliku tekstowego i go wyświetla; pliki binarne zgłaszają się zamiast wypisywać bałagan |
 | Tworzenie folderów | Tworzy podkatalog jednopoziomowy w bieżącym katalogu |
-| Dwujęzyczny interfejs | Każdy widoczny ciąg znaków przechodzi przez `ctx.locale`, więc panel podąża za językiem interfejsu |
+| Interfejs wielojęzyczny | Każdy widoczny tekst przechodzi przez `ctx.locale`; panel ma dwanaście języków i podąża za językiem interfejsu |
+| Wgrywanie pliku | Wysyła plik z przeglądarki do otwartego katalogu jednym wywołaniem Remote przenoszącym bajty |
 
 ## Instalacja
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Jako zależność profilu
 
-```jsonc
+```jsonc Wgrany plik idzie kanałem Remote tak jak każde inne polecenie: bajty pliku są w nim samym, a nie w ścieżce plikowej przeglądarki.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Po instalacji na pasku bocznym, za Plugins i Schedules, pojawia się **ikona fol
 Plugin to standardowy bundle DSH z połową Host i połową Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | Największy plik, jaki jedno pobranie może przenieść |
 
 `signal` musi być ostatnim parametrem: brama parsuje sygnaturę metody za pomocą `Function.prototype.toString()`, aby wyznaczyć parametry przesyłane po łączu, a uszkodzona sygnatura powoduje niepowodzenie wywołania.
@@ -122,7 +124,7 @@ Jedna odpowiedź jest ograniczona limitem bajtów załączników Harness (domyś
 ## Uprawnienia i granice
 
 - Plugin czyta system plików hosta z **uprawnieniami samego procesu Harness**: może odczytać wszystko, co może odczytać konto, które go uruchamia. To jest nieodłączne od natury eksploratora plików hosta, więc włączaj go tylko na maszynach i kontach, którym ufasz.
-- Plugin jest **tylko do odczytu, plus tworzenie folderów**. Nie potrafi zapisywać plików, usuwać ich, zmieniać ich nazw ani zmieniać uprawnień.
+- Wtyczka **tylko odczytuje, a także tworzy katalogi i przyjmuje wgrane pliki**. Nie modyfikuje, nie usuwa i nie zmienia nazwy istniejącego pliku, a wgranie nigdy go nie nadpisuje.
 - Jedno listowanie zwraca najwyżej 2000 wpisów, a jeden podgląd odczytuje najwyżej 256 KiB.
 - Jedno pobranie przenosi najwyżej limit bajtów załączników Harness (domyślnie 20 MiB); przy przekroczeniu panel najpierw wyjaśnia powód.
 

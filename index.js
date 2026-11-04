@@ -1,12 +1,13 @@
 /**
  * Host half of the host file-explorer bundle.
  *
- * The service this file registers, `ctx.hostFiles`, answers the four questions
+ * The service this file registers, `ctx.hostFiles`, answers the five questions
  * the browser page asks of the machine it runs on: which places are worth a
- * one-click jump, what one directory holds, what one file contains, and what
- * one new directory was called. Every method crosses the same Host/Client
- * Remote boundary the rest of the application uses, so the page reads the host
- * exactly the way the agent's own filesystem tools do.
+ * one-click jump, what one directory holds, what one file contains, what one
+ * new directory was called, and where one uploaded file landed. Every method
+ * crosses the same Host/Client Remote boundary the rest of the application
+ * uses, so the page reads and writes the host exactly the way the agent's own
+ * filesystem tools do.
  *
  * The Gateway learns which of these methods are remotely callable from the
  * marker the protocol package keeps on the service prototype. This file writes
@@ -14,7 +15,7 @@
  * with no dependency of its own and the marker shape stays pinned to the
  * protocol version this Harness runs.
  */
-import { mkdir as makeDirectory, open, readdir, stat as statPath } from 'node:fs/promises';
+import { mkdir as makeDirectory, open, readdir, stat as statPath, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, parse, resolve } from 'node:path';
 
@@ -282,6 +283,37 @@ class HostFiles {
   }
 
   /**
+   * Write one file the browser handed over into a directory.
+   *
+   * The bytes travel as canonical base64 — the wire form the Harness's own
+   * attachment endpoints admit — so one upload is one Remote call. The name
+   * has to be a single path segment, which keeps the target inside the
+   * directory the page is showing, and a file that already exists is never
+   * replaced: the upload fails instead of overwriting what is there.
+   *
+   * @param path - the parent directory.
+   * @param name - the new file's single path segment.
+   * @param data - the file's bytes, canonical base64.
+   * @param signal - caller lifetime.
+   * @returns the written file's absolute path and its size in bytes.
+   */
+  async upload(path, name, data, signal) {
+    const parent = await this.resolveDirectory(path);
+    if (typeof name !== 'string' || name.trim() === '' || name === '.' || name === '..' || /[/\\]/.test(name)) {
+      throw new Error(`"${String(name)}" is not a single path segment`);
+    }
+    if (typeof data !== 'string') throw new Error('the upload carries no data');
+    const bytes = Buffer.from(data, 'base64');
+    if (bytes.toString('base64') !== data) throw new Error('the upload is not canonical base64');
+    const { maxBytes } = await this.limits();
+    if (bytes.length > maxBytes) throw new Error(`the upload is larger than ${maxBytes} bytes`);
+    if (signal?.aborted === true) throw new Error('the upload was cancelled');
+    const target = join(parent, name);
+    await writeFile(target, bytes, { flag: 'wx' });
+    return { path: target, size: bytes.length };
+  }
+
+  /**
    * One absolute path: a relative one resolves against the process's directory.
    *
    * @param path - the path the caller named.
@@ -317,7 +349,7 @@ Object.defineProperty(HostFiles.prototype, REMOTE_METHODS, {
   value: Object.freeze({
     version: 1,
     methods: Object.freeze(
-      ['roots', 'list', 'stat', 'read', 'mkdir', 'limits'].map((method) =>
+      ['roots', 'list', 'stat', 'read', 'mkdir', 'upload', 'limits'].map((method) =>
         Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) }),
       ),
     ),

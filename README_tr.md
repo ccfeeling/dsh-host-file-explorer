@@ -14,7 +14,7 @@
 
 ---
 
-Harness'in içinden host makinesinin dosya sisteminde gezin: türleri, boyutları ve değiştirilme zamanlarıyla birlikte dizin listeleri, metin dosyası önizlemeleri ve klasör oluşturma. Her okuma, agent'ın kendi dosya sistemi araçlarının kullandığı sınır olan Host/Client Remote kanalından geçer.Dosyalar tarayıcıya indirilebilir, görseller satır içinde önizlenebilir.
+Harness'in içinden host makinesinin dosya sisteminde gezin: türleri, boyutları ve değiştirilme zamanlarıyla birlikte dizin listeleri, metin dosyası önizlemeleri ve klasör oluşturma. Her okuma, agent'ın kendi dosya sistemi araçlarının kullandığı sınır olan Host/Client Remote kanalından geçer.Dosyalar tarayıcıya indirilebilir, görseller satır içinde önizlenebilir. Dosyalar açık dizine de yüklenebilir.
 
 ![Host dosyaları paneli](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Harness'in içinden host makinesinin dosya sisteminde gezin: türleri, boyutlar�
 | Yol gezinme | Mutlak bir yola atla, üst dizine git veya HOME, tmp, cwd ve dosya sistemi kökü için kısayolları kullan |
 | Dosya önizleme | Bir metin dosyasının ilk 256 KiB'sini okur ve işler; ikili dosyalar gürültü yazdırmak yerine kendilerini bildirir |
 | Klasör oluşturma | Geçerli dizin içinde tek parçalı bir alt dizin oluşturur |
-| İki dilli arayüz | Görünür her metin `ctx.locale` üzerinden geçer, böylece panel arayüz dilini izler |
+| Çok dilli arayüz | Görünen her metin `ctx.locale` üzerinden geçer; panel on iki dil içerir ve arayüz dilini izler |
+| Dosya yükleme | Tarayıcıdaki bir dosyayı, baytları taşıyan tek bir Remote çağrısıyla açık dizine gönderir |
 
 ## Kurulum
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Bir profil bağımlılığı olarak
 
-```jsonc
+```jsonc Yüklenen dosya, diğer tüm komutlar gibi Remote kanalından geçer: baytları tarayıcının dosya rotasıyla değil, o çağrının içinde taşınır.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Kurulumdan sonra kenar çubuğunda, Plugins ve Schedules öğelerinden sonra bir
 Plugin, bir Host yarısı ve bir Client yarısı olan standart bir DSH bundle'ıdır:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | Tek bir indirmenin taşıyabileceği en büyük dosya |
 
 `signal` son parametre olmak zorunda: gateway, wire parametrelerini türetmek için metot imzasını `Function.prototype.toString()` ile ayrıştırır ve bozuk bir imza, çağrının başarısız olmasına neden olur.
@@ -122,7 +124,7 @@ Tek bir yanıt, Harness'ın ek bayt sınırıyla sınırlıdır (varsayılan 20 
 ## İzinler ve sınırlar
 
 - Plugin, host dosya sistemini **Harness sürecinin kendi ayrıcalıklarıyla** okur: onu çalıştıran hesabın okuyabildiği her şeyi okuyabilir. Bu, bir host dosya gezgininin doğasında yer alan bir durumdur; bu yüzden yalnızca güvendiğiniz makinelerde ve hesaplarda etkinleştirin.
-- Plugin **salt okunurdur ve klasör oluşturma yeteneğine sahiptir**. Dosya yazamaz, silemez, yeniden adlandıramaz veya izinleri değiştiremez.
+- Eklenti **yalnızca okur; ayrıca klasör oluşturur ve dosya yüklemesini kabul eder**. Var olan bir dosyayı değiştirmez, silmez veya yeniden adlandırmaz; yükleme hiçbir zaman mevcut bir dosyanın üzerine yazmaz.
 - Tek bir liste en fazla 2000 girdi döndürür ve tek bir önizleme en fazla 256 KiB okur.
 - Tek bir indirme en fazla Harness'ın ek bayt sınırını (varsayılan 20 MiB) taşır; sınır aşılırsa panel önce nedenini söyler.
 

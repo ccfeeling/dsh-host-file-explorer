@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Explorateur de fichiers de l’hôte",
+    "description": "Un panneau latéral qui parcourt le système de fichiers de la machine exécutant ce Harness : contenu des dossiers avec types et tailles, aperçu du texte et des images, téléchargement, téléversement et création de dossiers."
+  }
+}

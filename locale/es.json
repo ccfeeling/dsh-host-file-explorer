@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Explorador de archivos del host",
+    "description": "Un panel lateral que recorre el sistema de archivos de la máquina que ejecuta este Harness: listado de directorios con tipos y tamaños, vista previa de texto e imágenes, descargas, subidas y creación de carpetas."
+  }
+}

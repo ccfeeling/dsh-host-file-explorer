@@ -14,7 +14,7 @@
 
 ---
 
-在 Harness 內瀏覽 host 機器的檔案系統：目錄清單會列出類型、大小與修改時間，並提供文字檔預覽與建立資料夾功能。所有讀取都經由 Host/Client Remote 通道，與 agent 自身的檔案系統工具使用相同的邊界。檔案可以直接下載到瀏覽器，圖片則能內嵌預覽。
+在 Harness 內瀏覽 host 機器的檔案系統：目錄清單會列出類型、大小與修改時間，並提供文字檔預覽與建立資料夾功能。所有讀取都經由 Host/Client Remote 通道，與 agent 自身的檔案系統工具使用相同的邊界。檔案可以直接下載到瀏覽器，圖片則能內嵌預覽。 檔案也可以上傳到目前開啟的目錄。
 
 ![主機檔案面板](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@
 | 路徑導覽 | 跳至絕對路徑、回到上層目錄，或使用 HOME、tmp、cwd 與檔案系統根目錄的快捷方式 |
 | 檔案預覽 | 讀取文字檔的前 256 KiB 並加以呈現；二進位檔會直接回報自身狀態，而非印出雜訊 |
 | 建立資料夾 | 在目前目錄內建立單一段的子目錄 |
-| 雙語介面 | 每個可見字串都會經過 `ctx.locale`，因此面板會跟隨介面語言 |
+| 多語言介面 | 所有可見文字都經過 `ctx.locale` 處理，面板自帶十二種語言，並跟隨介面語言 |
+| 檔案上傳 | 把瀏覽器裡的檔案送到目前開啟的目錄，作為一次攜帶位元組的 Remote 呼叫 |
 
 ## 安裝
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### 作為 profile 相依性套件
 
-```jsonc
+```jsonc 上傳的檔案和其他命令一樣走 Remote 通道：位元組就在這次呼叫裡面，而不是走瀏覽器的檔案路由。
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 這個 plugin 是標準的 DSH bundle，由 Host 與 Client 兩半組成：
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | 單次下載可攜帶的最大檔案大小 |
 
 `signal` 必須是最後一個參數：gateway 會以 `Function.prototype.toString()` 解析 method 簽章以推導 wire 參數，簽章一旦損壞就會導致呼叫失敗。
@@ -122,7 +124,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ## 權限與界限
 
 - 這個 plugin 讀取 host 檔案系統時，**擁有 Harness 程序本身的權限**：它能讀取執行它的帳戶所能讀取的一切。這是 host 檔案瀏覽器固有的特性，因此只在你信任的機器與帳戶上啟用它。
-- 這個 plugin 是**唯讀加上建立資料夾**。它無法寫入檔案、刪除、改名或變更權限。
+- 外掛**唯讀，另外可以新增資料夾與上傳檔案**。它不會修改、刪除或重新命名既有的檔案，上傳也絕不會覆寫同名檔案。
 - 一次清單最多回傳 2000 個項目，一次預覽最多讀取 256 KiB。
 - 單次下載最多攜帶 Harness 附件位元組上限（預設 20 MiB）的內容；超限時面板會先說明原因。
 

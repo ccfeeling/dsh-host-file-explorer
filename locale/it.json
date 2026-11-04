@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Esplora file dell’host",
+    "description": "Un pannello laterale che sfoglia il file system della macchina che esegue questo Harness: elenco delle cartelle con tipo e dimensione, anteprima di testo e immagini, download, caricamento e creazione di cartelle."
+  }
+}

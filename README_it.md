@@ -14,7 +14,7 @@
 
 ---
 
-Sfoglia il file system della macchina host dall'interno dell'Harness: elenchi di directory con tipo, dimensione e data di modifica, anteprime dei file di testo e creazione di cartelle. Ogni lettura passa dal canale Remote Host/Client, lo stesso confine che usano gli strumenti del file system dell'agente stesso. I file si possono scaricare nel browser e le immagini si visualizzano direttamente nel riquadro.
+Sfoglia il file system della macchina host dall'interno dell'Harness: elenchi di directory con tipo, dimensione e data di modifica, anteprime dei file di testo e creazione di cartelle. Ogni lettura passa dal canale Remote Host/Client, lo stesso confine che usano gli strumenti del file system dell'agente stesso. I file si possono scaricare nel browser e le immagini si visualizzano direttamente nel riquadro. I file possono anche essere caricati nella cartella aperta.
 
 ![Pannello dei file dell’host](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Sfoglia il file system della macchina host dall'interno dell'Harness: elenchi di
 | Navigazione nei percorsi | Salta a un percorso assoluto, sali alla directory superiore o usa le scorciatoie per HOME, tmp, cwd e la radice del file system |
 | Anteprima dei file | Legge i primi 256 KiB di un file di testo e li visualizza; i file binari si dichiarano tali invece di stampare rumore |
 | Creazione di cartelle | Crea una sottodirectory a un solo segmento dentro la directory corrente |
-| UI bilingue | Ogni stringa visibile passa da `ctx.locale`, quindi il pannello segue la lingua dell'interfaccia |
+| Interfaccia multilingue | Ogni testo visibile passa per `ctx.locale`; il pannello porta con sé dodici lingue e segue la lingua dell’interfaccia |
+| Caricamento file | Invia un file dal browser alla cartella aperta, in una chiamata Remote che porta con sé i byte |
 
 ## Installazione
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Come dipendenza del profilo
 
-```jsonc
+```jsonc Un file caricato percorre il canale Remote come ogni altro comando: i suoi byte viaggiano dentro quella chiamata, non lungo la rotta dei file del browser.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Dopo l'installazione compare una **icona di cartella** nella barra laterale, dop
 Il plugin è un bundle DSH standard con una metà Host e una metà Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ La **metà Host** fornisce il servizio `ctx.hostFiles` e contrassegna i suoi ver
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | Il file più grande che un download può trasportare |
 
 `signal` deve essere l'ultimo parametro: il gateway analizza la firma del metodo con `Function.prototype.toString()` per ricavare i parametri sul filo e una firma malformata fa fallire la chiamata.
@@ -122,7 +124,7 @@ La **metà Client** scrive a mano un contributo Typert Remote, lo monta con `ctx
 ## Permessi e confini
 
 - Il plugin legge il file system dell'host con i **privilegi del processo Harness stesso**: può leggere tutto ciò che l'account che lo esegue è in grado di leggere. Questo è intrinseco a ciò che un esploratore di file dell'host è, quindi abilitalo solo su macchine e account di cui ti fidi.
-- Il plugin è **in sola lettura più creazione di cartelle**. Non può scrivere file, eliminarli, rinominarli o cambiarne i permessi.
+- Il plugin è **in sola lettura, più la creazione di cartelle e il caricamento di file**. Non modifica, non elimina e non rinomina un file già presente, e un caricamento non sostituisce mai un file.
 - Un elenco restituisce al massimo 2000 voci e un'anteprima legge al massimo 256 KiB.
 - Un download trasporta al massimo il limite di byte degli allegati di Harness (20 MiB per impostazione predefinita); se lo supera, il riquadro spiega prima il motivo.
 

@@ -14,7 +14,7 @@
 
 ---
 
-Jelajahi sistem berkas mesin host dari dalam Harness: daftar direktori beserta jenis, ukuran, dan waktu modifikasinya, pratinjau berkas teks, serta pembuatan folder. Setiap pembacaan melewati kanal Remote Host/Client, batas yang sama dengan yang dipakai oleh alat sistem berkas milik agent itu sendiri. File dapat diunduh ke peramban, dan gambar dapat dipratinjau langsung di panel.
+Jelajahi sistem berkas mesin host dari dalam Harness: daftar direktori beserta jenis, ukuran, dan waktu modifikasinya, pratinjau berkas teks, serta pembuatan folder. Setiap pembacaan melewati kanal Remote Host/Client, batas yang sama dengan yang dipakai oleh alat sistem berkas milik agent itu sendiri. File dapat diunduh ke peramban, dan gambar dapat dipratinjau langsung di panel. Berkas juga dapat diunggah ke direktori yang terbuka.
 
 ![Panel file host](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Jelajahi sistem berkas mesin host dari dalam Harness: daftar direktori beserta j
 | Navigasi path | Lompat ke path absolut, naik ke direktori induk, atau gunakan pintasan untuk HOME, tmp, cwd, dan root sistem berkas |
 | Pratinjau berkas | Membaca 256 KiB pertama dari berkas teks lalu menampilkannya; berkas biner melaporkan dirinya sendiri alih-alih mencetak keluaran berantakan |
 | Pembuatan folder | Membuat subdirektori satu segmen di dalam direktori saat ini |
-| UI dwibahasa | Setiap string yang terlihat melewati `ctx.locale`, sehingga panel mengikuti bahasa antarmuka |
+| Antarmuka multibahasa | Semua teks yang terlihat melewati `ctx.locale`; panel ini memiliki dua belas bahasa dan mengikuti bahasa antarmuka |
+| Unggah berkas | Mengirim berkas dari peramban ke direktori yang terbuka dalam satu pemanggilan Remote yang membawa byte-nya |
 
 ## Instalasi
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Sebagai dependensi profil
 
-```jsonc
+```jsonc Berkas yang diunggah berjalan melalui kanal Remote seperti perintah lain: byte-nya dibawa di dalam perintah itu sendiri, bukan lewat jalur berkas peramban.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Setelah pemasangan, sebuah **ikon folder** muncul di sidebar, setelah Plugins da
 Plugin ini adalah bundle DSH standar dengan separuh Host dan separuh Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | Berkas terbesar yang boleh diangkut satu unduhan |
 
 `signal` harus menjadi parameter terakhir: gateway mengurai tanda tangan method dengan `Function.prototype.toString()` untuk menurunkan parameter wire, dan tanda tangan yang rusak membuat pemanggilan gagal.
@@ -122,7 +124,7 @@ Satu jawaban dibatasi oleh batas byte lampiran Harness (20 MiB secara bawaan). H
 ## Izin dan batasan
 
 - Plugin membaca sistem berkas host dengan **hak akses proses Harness itu sendiri**: ia dapat membaca semua yang dapat dibaca oleh akun yang menjalankannya. Hal ini melekat pada apa itu penjelajah file host, jadi hanya aktifkan di mesin dan akun yang Anda percaya.
-- Plugin bersifat **hanya-baca ditambah pembuatan folder**. Ia tidak dapat menulis berkas, menghapus, mengganti nama, atau mengubah izin.
+- Plugin ini **hanya membaca, membuat folder, dan menerima unggahan**. Ia tidak mengubah, menghapus, atau mengganti nama berkas yang sudah ada, dan unggahan tidak pernah menimpa berkas lama.
 - Satu daftar mengembalikan paling banyak 2000 entri, dan satu pratinjau membaca paling banyak 256 KiB.
 - Satu unduhan mengangkut paling banyak batas byte lampiran Harness (20 MiB secara bawaan); bila terlampaui, panel menjelaskan alasannya lebih dulu.
 

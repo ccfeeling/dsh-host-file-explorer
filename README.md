@@ -14,7 +14,7 @@
 
 ---
 
-Browse the filesystem of the host machine from inside the Harness: directory listings with kinds, sizes, and modification times, text file previews, and folder creation. Every read goes through the Host/Client Remote channel, the same boundary the agent's own filesystem tools use. Files can be downloaded into the browser, and images are previewed inline.
+Browse the filesystem of the host machine from inside the Harness: directory listings with kinds, sizes, and modification times, text file previews, and folder creation. Every read goes through the Host/Client Remote channel, the same boundary the agent's own filesystem tools use. Files can be downloaded into the browser, and images are previewed inline. Files can be uploaded into the directory that is open.
 
 ![Host files panel](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Browse the filesystem of the host machine from inside the Harness: directory lis
 | Path navigation | Jump to an absolute path, go to the parent, or use the shortcuts for HOME, tmp, cwd, and the filesystem root |
 | File preview | Reads the first 256 KiB of a text file and renders it; binary files report themselves instead of printing noise |
 | Folder creation | Creates a single-segment subdirectory inside the current directory |
-| Bilingual UI | Every visible string goes through `ctx.locale`, so the panel follows the interface language |
+| Multilingual UI | Every visible string goes through `ctx.locale`; the panel ships twelve languages and follows the interface language |
+| File upload | Sends a file from the browser to the directory that is open, as one Remote call carrying the bytes |
 
 ## Install
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### As a profile dependency
 
-```jsonc
+```jsonc An uploaded file takes the Remote channel like every other command: its bytes travel inside that command, not over the browser file route.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ After installation a **folder icon** appears in the sidebar, after Plugins and S
 The plugin is a standard DSH bundle with a Host half and a Client half:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ The **Host half** provides a `ctx.hostFiles` service and marks its verbs for the
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | The largest file one download may carry |
 
 `signal` has to be the last parameter: the gateway parses the method signature with `Function.prototype.toString()` to derive the wire parameters, and a broken signature makes the call fail.
@@ -122,7 +124,7 @@ The **Client half** hand-writes a Typert Remote contribution, mounts it with `ct
 ## Permissions and boundaries
 
 - The plugin reads the host filesystem with the **privileges of the Harness process itself**: it can read everything the account running it can read. That is inherent to what a host file explorer is, so only enable it on machines and accounts you trust.
-- The plugin is **read-only plus folder creation**. It cannot write files, delete, rename, or change permissions.
+- The plugin is **read-only plus folder creation and file uploads**. It cannot modify, delete, or rename a file that is already there, and an upload never replaces one.
 - One listing returns at most 2000 entries, and one preview reads at most 256 KiB.
 - One download carries at most the Harness's attachment byte limit (20 MiB by default); the panel says so before it starts an oversized transfer.
 

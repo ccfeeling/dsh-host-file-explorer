@@ -14,7 +14,7 @@
 
 ---
 
-Durchsuchen Sie das Dateisystem des Host-Rechners direkt aus dem Harness heraus: Verzeichnislisten mit Arten, Größen und Änderungszeiten, Vorschauen von Textdateien und das Anlegen von Ordnern. Jeder Lesezugriff läuft über den Host/Client Remote-Kanal – dieselbe Grenze, die auch die eigenen Dateisystem-Tools des Agenten verwenden. Dateien lassen sich in den Browser herunterladen, Bilder werden direkt in der Leiste angezeigt.
+Durchsuchen Sie das Dateisystem des Host-Rechners direkt aus dem Harness heraus: Verzeichnislisten mit Arten, Größen und Änderungszeiten, Vorschauen von Textdateien und das Anlegen von Ordnern. Jeder Lesezugriff läuft über den Host/Client Remote-Kanal – dieselbe Grenze, die auch die eigenen Dateisystem-Tools des Agenten verwenden. Dateien lassen sich in den Browser herunterladen, Bilder werden direkt in der Leiste angezeigt. Dateien lassen sich außerdem in den geöffneten Ordner hochladen.
 
 ![Host-Dateien-Bereich](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Durchsuchen Sie das Dateisystem des Host-Rechners direkt aus dem Harness heraus:
 | Pfadnavigation | Springen Sie zu einem absoluten Pfad, wechseln Sie zum übergeordneten Verzeichnis oder nutzen Sie die Sprünge für HOME, tmp, cwd und das Wurzelverzeichnis des Dateisystems |
 | Dateivorschau | Liest die ersten 256 KiB einer Textdatei und stellt sie dar; Binärdateien melden sich selbst, statt Unleserliches auszugeben |
 | Ordneranlage | Erstellt ein einstufiges Unterverzeichnis im aktuellen Verzeichnis |
-| Zweisprachige Oberfläche | Jede sichtbare Zeichenkette läuft durch `ctx.locale`, sodass das Panel der Oberflächensprache folgt |
+| Mehrsprachige Oberfläche | Jeder sichtbare Text läuft durch `ctx.locale`; das Panel bringt zwölf Sprachen mit und folgt der Sprache der Oberfläche |
+| Datei-Upload | Sendet eine Datei aus dem Browser in den geöffneten Ordner, als ein Remote-Aufruf, der die Bytes mitführt |
 
 ## Installation
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Als Profil-Abhängigkeit
 
-```jsonc
+```jsonc Eine hochgeladene Datei nimmt denselben Remote-Kanal wie jeder andere Befehl: ihre Bytes reisen in diesem Aufruf, nicht über die Dateiroute des Browsers.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Nach der Installation erscheint ein **Ordnersymbol** in der Seitenleiste, hinter
 Das plugin ist ein Standard-DSH-Bundle mit einer Host-Hälfte und einer Client-Hälfte:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ Die **Host-Hälfte** stellt einen `ctx.hostFiles`-Service bereit und markiert de
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | Die größte Datei, die ein Download tragen darf |
 
 `signal` muss der letzte Parameter sein: Das Gateway parst die Methodensignatur mit `Function.prototype.toString()`, um die Wire-Parameter abzuleiten, und eine fehlerhafte Signatur lässt den Aufruf scheitern.
@@ -122,7 +124,7 @@ Die **Client-Hälfte** schreibt einen Typert-Remote-Beitrag von Hand, bindet ihn
 ## Berechtigungen und Grenzen
 
 - Das plugin liest das Dateisystem des Hosts mit den **Rechten des Harness-Prozesses selbst**: Es kann alles lesen, was das Konto, das ihn ausführt, lesen kann. Das liegt im Wesen eines Host-Dateiexplorers, aktivieren Sie ihn daher nur auf Rechnern und Konten, denen Sie vertrauen.
-- Das plugin ist **nur lesend, ergänzt um das Anlegen von Ordnern**. Es kann keine Dateien schreiben, löschen, umbenennen oder deren Rechte ändern.
+- Das Plugin ist **nur lesend, dazu das Anlegen von Ordnern und das Hochladen von Dateien**. Es ändert, löscht oder benennt keine vorhandene Datei um, und ein Upload ersetzt niemals eine Datei.
 - Eine Liste liefert höchstens 2000 Einträge, und eine Vorschau liest höchstens 256 KiB.
 - Ein Download trägt höchstens das Anhangs-Byte-Limit des Harness (standardmäßig 20 MiB); bei Überschreitung erklärt die Leiste zuerst den Grund.
 

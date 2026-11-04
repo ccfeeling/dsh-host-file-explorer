@@ -14,7 +14,7 @@
 
 ---
 
-在 Harness 内浏览宿主机器的文件系统：查看带类型、大小和修改时间的目录列表、预览文本文件，以及新建文件夹。每次读取都经过 Host/Client Remote 通道，与 agent 自带的文件系统工具使用的是同一条边界。文件可以直接下载到浏览器，图片则能内联预览。
+在 Harness 内浏览宿主机器的文件系统：查看带类型、大小和修改时间的目录列表、预览文本文件，以及新建文件夹。每次读取都经过 Host/Client Remote 通道，与 agent 自带的文件系统工具使用的是同一条边界。文件可以直接下载到浏览器，图片则能内联预览。 文件也可以上传到当前打开的目录。
 
 ![宿主机文件面板](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@
 | 路径导航 | 跳转到绝对路径、返回上级目录，或使用 HOME、tmp、cwd 与文件系统根目录的快捷入口 |
 | 文件预览 | 读取文本文件的前 256 KiB 并渲染出来；二进制文件会自行说明情况，而不是打印无意义的内容 |
 | 新建文件夹 | 在当前目录下创建一个单层子目录 |
-| 双语界面 | 所有可见文本都经过 `ctx.locale` 处理，因此面板会跟随界面语言 |
+| 多语言界面 | 所有可见文本都经过 `ctx.locale` 处理，面板自带十二种语言，并跟随界面语言 |
+| 文件上传 | 把浏览器里的文件发到当前打开的目录，作为一次携带字节的 Remote 调用 |
 
 ## 安装
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### 作为 profile 依赖
 
-```jsonc
+```jsonc 上传的文件和其他命令一样走 Remote 通道：字节就在这次调用里面，而不是走浏览器的文件路由。
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 本 plugin 是一个标准的 DSH bundle，由 Host 端和 Client 端两部分组成：
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`、`name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | 单次下载可携带的最大文件大小 |
 
 `signal` 必须是最后一个参数：网关使用 `Function.prototype.toString()` 解析方法签名以推导出线上参数，一旦签名出错，调用就会失败。
@@ -122,7 +124,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ## 权限与边界
 
 - 本 plugin 读取宿主文件系统时使用的是 **Harness 进程自身的权限**：它能读到运行它的账号所能读取的一切。这是 host 文件浏览器固有的特性，因此请只在你信任的机器和账号上启用它。
-- 本 plugin **只读，另外支持新建文件夹**。它无法写入文件、删除、重命名或更改权限。
+- 插件**只读，另外可以新建文件夹与上传文件**。它不会修改、删除或重命名已存在的文件，上传也绝不会覆盖同名文件。
 - 单次列表最多返回 2000 个条目，单次预览最多读取 256 KiB。
 - 单次下载最多携带 Harness 附件字节上限（默认 20 MiB）的内容；超限时面板会先说明原因。
 

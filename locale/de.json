@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Host-Dateiexplorer",
+    "description": "Ein Seitenleisten-Panel, das das Dateisystem des Rechners durchsucht, auf dem dieses Harness läuft: Verzeichnisse mit Art und Größe, Vorschau von Text und Bildern, Download, Upload und neue Ordner."
+  }
+}

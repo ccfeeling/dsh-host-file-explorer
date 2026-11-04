@@ -14,7 +14,7 @@
 
 ---
 
-Parcourez le système de fichiers de la machine Host depuis le Harness : listes de répertoires avec types, tailles et dates de modification, aperçus de fichiers texte et création de dossiers. Chaque lecture passe par le canal Remote Host/Client, la même frontière que celle qu'utilisent les outils de système de fichiers de l'agent lui-même. Les fichiers peuvent être téléchargés dans le navigateur, et les images sont prévisualisées directement.
+Parcourez le système de fichiers de la machine Host depuis le Harness : listes de répertoires avec types, tailles et dates de modification, aperçus de fichiers texte et création de dossiers. Chaque lecture passe par le canal Remote Host/Client, la même frontière que celle qu'utilisent les outils de système de fichiers de l'agent lui-même. Les fichiers peuvent être téléchargés dans le navigateur, et les images sont prévisualisées directement. Les fichiers peuvent aussi être téléversés dans le dossier ouvert.
 
 ![Panneau des fichiers de l’hôte](assets/screenshot-1.png)
 
@@ -28,7 +28,8 @@ Parcourez le système de fichiers de la machine Host depuis le Harness : listes 
 | Navigation par chemin | Accédez à un chemin absolu, remontez au parent, ou utilisez les raccourcis pour HOME, tmp, cwd et la racine du système de fichiers |
 | Aperçu de fichier | Lit les 256 premiers KiB d'un fichier texte et l'affiche ; les fichiers binaires signalent leur nature au lieu d'afficher du bruit |
 | Création de dossier | Crée un sous-répertoire à un seul niveau dans le répertoire courant |
-| Interface bilingue | Chaque chaîne visible passe par `ctx.locale`, si bien que le panneau suit la langue de l'interface |
+| Interface multilingue | Chaque texte visible passe par `ctx.locale` ; le panneau embarque douze langues et suit la langue de l’interface |
+| Téléversement de fichier | Envoie un fichier du navigateur vers le dossier ouvert, en un appel Remote qui porte les octets |
 
 ## Installation
 
@@ -56,7 +57,7 @@ dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
 
 ### Comme dépendance d'un profil
 
-```jsonc
+```jsonc Un fichier téléversé emprunte le canal Remote comme toutes les autres commandes : ses octets voyagent dans cet appel, pas par la route de fichiers du navigateur.
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
@@ -79,7 +80,7 @@ Après l'installation, une **icône de dossier** apparaît dans la barre latéra
 Le plugin est un bundle DSH standard avec une moitié Host et une moitié Client :
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  seven verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -92,6 +93,7 @@ La **moitié Host** fournit un service `ctx.hostFiles` et marque ses verbes pour
 | `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `upload(path, name, data, signal)` | `path`, `name`, `data` | `{ path, size }` |
 | `limits()` | — | Le plus grand fichier qu'un téléchargement peut transporter |
 
 `signal` doit être le dernier paramètre : la passerelle analyse la signature de la méthode avec `Function.prototype.toString()` pour en déduire les paramètres transmis, et une signature incorrecte fait échouer l'appel.
@@ -122,7 +124,7 @@ La **moitié Client** écrit à la main une contribution Remote Typert, la monte
 ## Permissions et limites
 
 - Le plugin lit le système de fichiers de la machine Host avec les **privilèges du processus Harness lui-même** : il peut lire tout ce que le compte qui l'exécute peut lire. C'est inhérent à ce qu'est un explorateur de fichiers Host, donc ne l'activez que sur les machines et les comptes de confiance.
-- Le plugin est **en lecture seule, plus la création de dossiers**. Il ne peut pas écrire de fichiers, supprimer, renommer ni modifier les permissions.
+- Le plugin est **en lecture seule, plus la création de dossiers et le téléversement de fichiers**. Il ne modifie, ne supprime et ne renomme aucun fichier existant, et un téléversement ne remplace jamais un fichier.
 - Un listage renvoie au plus 2000 entrées, et un aperçu lit au plus 256 KiB.
 - Un téléchargement transporte au plus la limite d'octets des pièces jointes du Harness (20 Mio par défaut) ; au-delà, le panneau explique d'abord pourquoi.
 
