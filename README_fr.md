@@ -14,12 +14,14 @@
 
 ---
 
-Parcourez le système de fichiers de la machine Host depuis le Harness : listes de répertoires avec types, tailles et dates de modification, aperçus de fichiers texte et création de dossiers. Chaque lecture passe par le canal Remote Host/Client, la même frontière que celle qu'utilisent les outils de système de fichiers de l'agent lui-même.
+Parcourez le système de fichiers de la machine Host depuis le Harness : listes de répertoires avec types, tailles et dates de modification, aperçus de fichiers texte et création de dossiers. Chaque lecture passe par le canal Remote Host/Client, la même frontière que celle qu'utilisent les outils de système de fichiers de l'agent lui-même. Les fichiers peuvent être téléchargés dans le navigateur, et les images sont prévisualisées directement.
 
 ## Fonctionnalités
 
 | Fonctionnalité | Description |
 | --- | --- |
+| Téléchargement | Confie le fichier au navigateur par la route de fichiers authentifiée du Harness, sous son propre nom |
+| Aperçu des images | Affiche en ligne une image PNG, JPEG, GIF, WebP, AVIF ou SVG, au lieu de la lire comme du texte |
 | Liste des répertoires | Les répertoires d'abord, puis les fichiers, chacun avec sa taille et sa date de modification ; les entrées cachées sont grisées |
 | Navigation par chemin | Accédez à un chemin absolu, remontez au parent, ou utilisez les raccourcis pour HOME, tmp, cwd et la racine du système de fichiers |
 | Aperçu de fichier | Lit les 256 premiers KiB d'un fichier texte et l'affiche ; les fichiers binaires signalent leur nature au lieu d'afficher du bruit |
@@ -67,7 +69,7 @@ Après l'installation, une **icône de dossier** apparaît dans la barre latéra
 Le plugin est un bundle DSH standard avec une moitié Host et une moitié Client :
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ La **moitié Host** fournit un service `ctx.hostFiles` et marque ses verbes pour
 | Méthode | Paramètres | Retour |
 | --- | --- | --- |
 | `roots()` | — | Emplacements connus (HOME, tmp, cwd, racine du système de fichiers) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | Le plus grand fichier qu'un téléchargement peut transporter |
 
 `signal` doit être le dernier paramètre : la passerelle analyse la signature de la méthode avec `Function.prototype.toString()` pour en déduire les paramètres transmis, et une signature incorrecte fait échouer l'appel.
+
+### Comment les fichiers parviennent au navigateur
+
+La page ne transporte jamais d'octets de fichier par le canal Remote. Elle demande à l'Host l'adresse du fichier sur la route de fichiers authentifiée du Harness lui-même — celle que l'aperçu de documents livré utilise pour les images d'un document Markdown — et le navigateur la récupère avec la session que la page possède déjà. Un téléchargement garde donc le nom du fichier, et un aperçu reçoit le type de contenu réel : un PNG s'affiche en PNG.
+
+Une réponse est bornée par la limite d'octets des pièces jointes du Harness (20 Mio par défaut). La page lit cette valeur chez l'Host et refuse un téléchargement trop volumineux en l'expliquant, au lieu de lancer un transfert qui échouerait.
 
 La **moitié Client** écrit à la main une contribution Remote Typert, la monte avec `ctx.remote.$mount(...)`, puis enregistre deux slots :
 
@@ -105,6 +114,7 @@ La **moitié Client** écrit à la main une contribution Remote Typert, la monte
 - Le plugin lit le système de fichiers de la machine Host avec les **privilèges du processus Harness lui-même** : il peut lire tout ce que le compte qui l'exécute peut lire. C'est inhérent à ce qu'est un explorateur de fichiers Host, donc ne l'activez que sur les machines et les comptes de confiance.
 - Le plugin est **en lecture seule, plus la création de dossiers**. Il ne peut pas écrire de fichiers, supprimer, renommer ni modifier les permissions.
 - Un listage renvoie au plus 2000 entrées, et un aperçu lit au plus 256 KiB.
+- Un téléchargement transporte au plus la limite d'octets des pièces jointes du Harness (20 Mio par défaut) ; au-delà, le panneau explique d'abord pourquoi.
 
 ## Développement
 

@@ -14,12 +14,14 @@
 
 ---
 
-在 Harness 內瀏覽 host 機器的檔案系統：目錄清單會列出類型、大小與修改時間，並提供文字檔預覽與建立資料夾功能。所有讀取都經由 Host/Client Remote 通道，與 agent 自身的檔案系統工具使用相同的邊界。
+在 Harness 內瀏覽 host 機器的檔案系統：目錄清單會列出類型、大小與修改時間，並提供文字檔預覽與建立資料夾功能。所有讀取都經由 Host/Client Remote 通道，與 agent 自身的檔案系統工具使用相同的邊界。檔案可以直接下載到瀏覽器，圖片則能內嵌預覽。
 
 ## 功能
 
 | 功能 | 說明 |
 | --- | --- |
+| 檔案下載 | 透過 Harness 自帶的鑑權檔案路由把檔案交給瀏覽器，並保留檔案原名 |
+| 圖片預覽 | 內嵌顯示 PNG、JPEG、GIF、WebP、AVIF、SVG 等圖片，不再當作文字讀取 |
 | 目錄清單 | 先列出目錄，再列出檔案，每個項目都附有大小與修改時間；隱藏項目會以較淡的樣式顯示 |
 | 路徑導覽 | 跳至絕對路徑、回到上層目錄，或使用 HOME、tmp、cwd 與檔案系統根目錄的快捷方式 |
 | 檔案預覽 | 讀取文字檔的前 256 KiB 並加以呈現；二進位檔會直接回報自身狀態，而非印出雜訊 |
@@ -67,7 +69,7 @@ dsh plugin --profile web add /path/to/dsh-host-file-explorer
 這個 plugin 是標準的 DSH bundle，由 Host 與 Client 兩半組成：
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | Method | 參數 | 回傳值 |
 | --- | --- | --- |
 | `roots()` | — | 常用位置（HOME、tmp、cwd、檔案系統根目錄） |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | 單次下載可攜帶的最大檔案大小 |
 
 `signal` 必須是最後一個參數：gateway 會以 `Function.prototype.toString()` 解析 method 簽章以推導 wire 參數，簽章一旦損壞就會導致呼叫失敗。
+
+### 檔案如何到達瀏覽器
+
+頁面不會把檔案位元組塞進 Remote 通道。它向 Host 詢問該檔案在 Harness 自帶的鑑權檔案路由上的位址——官方文件預覽渲染 Markdown 內嵌圖片時用的正是這條路由——瀏覽器再用頁面已有的工作階段去取。於是下載保留檔案原名，預覽拿到檔案自己的內容型別，PNG 就是按 PNG 算繪的。
+
+單次回應受 Harness 附件位元組上限約束（預設 20 MiB）。頁面會從 Host 讀到這個數字，遇到超限檔案直接說明原因，而不是發起注定失敗的傳輸。
 
 **Client 那一半**以手寫方式提供一個 Typert Remote 貢獻，以 `ctx.remote.$mount(...)` 掛載它，接著註冊兩個 slots：
 
@@ -105,6 +114,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 - 這個 plugin 讀取 host 檔案系統時，**擁有 Harness 程序本身的權限**：它能讀取執行它的帳戶所能讀取的一切。這是 host 檔案瀏覽器固有的特性，因此只在你信任的機器與帳戶上啟用它。
 - 這個 plugin 是**唯讀加上建立資料夾**。它無法寫入檔案、刪除、改名或變更權限。
 - 一次清單最多回傳 2000 個項目，一次預覽最多讀取 256 KiB。
+- 單次下載最多攜帶 Harness 附件位元組上限（預設 20 MiB）的內容；超限時面板會先說明原因。
 
 ## 開發
 

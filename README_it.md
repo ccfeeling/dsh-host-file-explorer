@@ -14,12 +14,14 @@
 
 ---
 
-Sfoglia il file system della macchina host dall'interno dell'Harness: elenchi di directory con tipo, dimensione e data di modifica, anteprime dei file di testo e creazione di cartelle. Ogni lettura passa dal canale Remote Host/Client, lo stesso confine che usano gli strumenti del file system dell'agente stesso.
+Sfoglia il file system della macchina host dall'interno dell'Harness: elenchi di directory con tipo, dimensione e data di modifica, anteprime dei file di testo e creazione di cartelle. Ogni lettura passa dal canale Remote Host/Client, lo stesso confine che usano gli strumenti del file system dell'agente stesso. I file si possono scaricare nel browser e le immagini si visualizzano direttamente nel riquadro.
 
 ## Funzionalità
 
 | Funzionalità | Descrizione |
 | --- | --- |
+| Download del file | consegna il file al browser tramite la rotta di file autenticata dello stesso Harness, con il nome del file |
+| Anteprima immagine | mostra in linea un'immagine PNG, JPEG, GIF, WebP, AVIF o SVG, invece di leggerla come testo |
 | Elenco delle directory | Prima le directory, poi i file, ciascuno con dimensione e data di modifica; le voci nascoste sono attenuate |
 | Navigazione nei percorsi | Salta a un percorso assoluto, sali alla directory superiore o usa le scorciatoie per HOME, tmp, cwd e la radice del file system |
 | Anteprima dei file | Legge i primi 256 KiB di un file di testo e li visualizza; i file binari si dichiarano tali invece di stampare rumore |
@@ -67,7 +69,7 @@ Dopo l'installazione compare una **icona di cartella** nella barra laterale, dop
 Il plugin è un bundle DSH standard con una metà Host e una metà Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ La **metà Host** fornisce il servizio `ctx.hostFiles` e contrassegna i suoi ver
 | Metodo | Parametri | Restituisce |
 | --- | --- | --- |
 | `roots()` | — | Percorsi noti (HOME, tmp, cwd, radice del file system) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | Il file più grande che un download può trasportare |
 
 `signal` deve essere l'ultimo parametro: il gateway analizza la firma del metodo con `Function.prototype.toString()` per ricavare i parametri sul filo e una firma malformata fa fallire la chiamata.
+
+### Come i file arrivano al browser
+
+La pagina non trasporta mai byte di file attraverso il canale Remote. Chiede all'Host l'indirizzo del file sulla rotta di file autenticata dello stesso Harness — la stessa usata dall'anteprima dei documenti inclusa per le immagini dentro un documento Markdown — e il browser lo recupera con la sessione che la pagina possiede già. Così un download mantiene il nome del file e un'anteprima riceve il vero tipo di contenuto: un PNG viene disegnato come PNG.
+
+Una risposta è limitata dal limite di byte degli allegati di Harness (20 MiB per impostazione predefinita). La pagina legge quel numero dall'Host e rifiuta un download troppo grande spiegandone il motivo, invece di avviare un trasferimento che fallirebbe.
 
 La **metà Client** scrive a mano un contributo Typert Remote, lo monta con `ctx.remote.$mount(...)` e poi registra due slot:
 
@@ -105,6 +114,7 @@ La **metà Client** scrive a mano un contributo Typert Remote, lo monta con `ctx
 - Il plugin legge il file system dell'host con i **privilegi del processo Harness stesso**: può leggere tutto ciò che l'account che lo esegue è in grado di leggere. Questo è intrinseco a ciò che un esploratore di file dell'host è, quindi abilitalo solo su macchine e account di cui ti fidi.
 - Il plugin è **in sola lettura più creazione di cartelle**. Non può scrivere file, eliminarli, rinominarli o cambiarne i permessi.
 - Un elenco restituisce al massimo 2000 voci e un'anteprima legge al massimo 256 KiB.
+- Un download trasporta al massimo il limite di byte degli allegati di Harness (20 MiB per impostazione predefinita); se lo supera, il riquadro spiega prima il motivo.
 
 ## Sviluppo
 

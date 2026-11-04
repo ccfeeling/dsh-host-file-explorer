@@ -14,12 +14,14 @@
 
 ---
 
-Przeglądaj system plików maszyny Host z wnętrza Harness: listy katalogów z rodzajami, rozmiarami i czasami modyfikacji, podgląd plików tekstowych oraz tworzenie folderów. Każdy odczyt przechodzi przez kanał Remote Host/Client — tę samą granicę, której używają własne narzędzia systemu plików agenta.
+Przeglądaj system plików maszyny Host z wnętrza Harness: listy katalogów z rodzajami, rozmiarami i czasami modyfikacji, podgląd plików tekstowych oraz tworzenie folderów. Każdy odczyt przechodzi przez kanał Remote Host/Client — tę samą granicę, której używają własne narzędzia systemu plików agenta. Pliki można pobrać do przeglądarki, a obrazy wyświetlać w miejscu.
 
 ## Funkcje
 
 | Funkcja | Opis |
 | --- | --- |
+| Pobieranie pliku | Przekazuje plik przeglądarce przez uwierzytelnioną trasę plików samego Harness, pod jego własną nazwą |
+| Podgląd obrazu | Wyświetla obraz PNG, JPEG, GIF, WebP, AVIF lub SVG w miejscu, zamiast czytać go jako tekst |
 | Lista katalogów | Najpierw katalogi, potem pliki, każdy z rozmiarem i czasem modyfikacji; ukryte wpisy są przygaszone |
 | Nawigacja po ścieżkach | Przejdź do ścieżki bezwzględnej, wróć do katalogu nadrzędnego lub skorzystaj ze skrótów dla HOME, tmp, cwd i katalogu głównego systemu plików |
 | Podgląd pliku | Odczytuje pierwsze 256 KiB pliku tekstowego i go wyświetla; pliki binarne zgłaszają się zamiast wypisywać bałagan |
@@ -67,7 +69,7 @@ Po instalacji na pasku bocznym, za Plugins i Schedules, pojawia się **ikona fol
 Plugin to standardowy bundle DSH z połową Host i połową Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | Metoda | Parametry | Zwraca |
 | --- | --- | --- |
 | `roots()` | — | Znane lokalizacje (HOME, tmp, cwd, katalog główny systemu plików) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | Największy plik, jaki jedno pobranie może przenieść |
 
 `signal` musi być ostatnim parametrem: brama parsuje sygnaturę metody za pomocą `Function.prototype.toString()`, aby wyznaczyć parametry przesyłane po łączu, a uszkodzona sygnatura powoduje niepowodzenie wywołania.
+
+### Jak pliki trafiają do przeglądarki
+
+Strona nigdy nie przenosi bajtów pliku kanałem Remote. Pyta Host o adres pliku na uwierzytelnionej trasie plików samego Harness — tej samej, której używa dostarczany podgląd dokumentów dla obrazów wewnątrz dokumentu Markdown — a przeglądarka pobiera go przy użyciu sesji, którą strona już ma. Dzięki temu pobieranie zachowuje własną nazwę pliku, a podgląd otrzymuje rzeczywisty typ zawartości, więc PNG rysowany jest jako PNG.
+
+Jedna odpowiedź jest ograniczona limitem bajtów załączników Harness (domyślnie 20 MiB). Strona odczytuje tę liczbę z Host i odrzuca zbyt duże pobranie, wyjaśniając powód, zamiast rozpoczynać transfer, który by się nie powiódł.
 
 **Połowa Client** ręcznie tworzy wkład Remote w Typert, montuje go za pomocą `ctx.remote.$mount(...)`, a następnie rejestruje dwa sloty:
 
@@ -105,6 +114,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 - Plugin czyta system plików hosta z **uprawnieniami samego procesu Harness**: może odczytać wszystko, co może odczytać konto, które go uruchamia. To jest nieodłączne od natury eksploratora plików hosta, więc włączaj go tylko na maszynach i kontach, którym ufasz.
 - Plugin jest **tylko do odczytu, plus tworzenie folderów**. Nie potrafi zapisywać plików, usuwać ich, zmieniać ich nazw ani zmieniać uprawnień.
 - Jedno listowanie zwraca najwyżej 2000 wpisów, a jeden podgląd odczytuje najwyżej 256 KiB.
+- Jedno pobranie przenosi najwyżej limit bajtów załączników Harness (domyślnie 20 MiB); przy przekroczeniu panel najpierw wyjaśnia powód.
 
 ## Rozwój
 

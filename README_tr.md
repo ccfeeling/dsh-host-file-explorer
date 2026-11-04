@@ -14,12 +14,14 @@
 
 ---
 
-Harness'in içinden host makinesinin dosya sisteminde gezin: türleri, boyutları ve değiştirilme zamanlarıyla birlikte dizin listeleri, metin dosyası önizlemeleri ve klasör oluşturma. Her okuma, agent'ın kendi dosya sistemi araçlarının kullandığı sınır olan Host/Client Remote kanalından geçer.
+Harness'in içinden host makinesinin dosya sisteminde gezin: türleri, boyutları ve değiştirilme zamanlarıyla birlikte dizin listeleri, metin dosyası önizlemeleri ve klasör oluşturma. Her okuma, agent'ın kendi dosya sistemi araçlarının kullandığı sınır olan Host/Client Remote kanalından geçer.Dosyalar tarayıcıya indirilebilir, görseller satır içinde önizlenebilir.
 
 ## Özellikler
 
 | Özellik | Açıklama |
 | --- | --- |
+| Dosya indirme | Dosyayı, Harness'ın kimlik doğrulamalı dosya rotası üzerinden, kendi adıyla tarayıcıya verir |
+| Görsel önizleme | PNG, JPEG, GIF, WebP, AVIF veya SVG görsellerini metin olarak okumadan satır içinde gösterir |
 | Dizin listeleme | Önce dizinler, sonra dosyalar; her biri boyut ve değiştirilme zamanıyla birlikte; gizli girdiler soluk gösterilir |
 | Yol gezinme | Mutlak bir yola atla, üst dizine git veya HOME, tmp, cwd ve dosya sistemi kökü için kısayolları kullan |
 | Dosya önizleme | Bir metin dosyasının ilk 256 KiB'sini okur ve işler; ikili dosyalar gürültü yazdırmak yerine kendilerini bildirir |
@@ -67,7 +69,7 @@ Kurulumdan sonra kenar çubuğunda, Plugins ve Schedules öğelerinden sonra bir
 Plugin, bir Host yarısı ve bir Client yarısı olan standart bir DSH bundle'ıdır:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | Metot | Parametreler | Dönüş değerleri |
 | --- | --- | --- |
 | `roots()` | — | Bilinen konumlar (HOME, tmp, cwd, dosya sistemi kökü) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | Tek bir indirmenin taşıyabileceği en büyük dosya |
 
 `signal` son parametre olmak zorunda: gateway, wire parametrelerini türetmek için metot imzasını `Function.prototype.toString()` ile ayrıştırır ve bozuk bir imza, çağrının başarısız olmasına neden olur.
+
+### Dosyalar tarayıcıya nasıl ulaşır
+
+Sayfa dosya baytlarını hiçbir zaman Remote kanalı üzerinden taşımaz. Dosyanın Harness'ın kendi kimlik doğrulamalı dosya rotasındaki adresini Host'tan sorar; gönderilmiş belge önizlemesinin Markdown içindeki görseller için kullandığı rota da budur. Tarayıcı dosyayı sayfanın zaten sahip olduğu oturumla çeker. Böylece indirme dosyanın kendi adını korur, önizleme ise dosyanın kendi içerik türünü alır; bir PNG PNG olarak çizilir.
+
+Tek bir yanıt, Harness'ın ek bayt sınırıyla sınırlıdır (varsayılan 20 MiB). Sayfa bu sayıyı Host'tan okur ve sınırı aşan bir indirmeyi, başarısız olacak bir aktarımı başlatmak yerine açıklamayla reddeder.
 
 **Client yarısı**, bir Typert Remote katkısını elle yazar, `ctx.remote.$mount(...)` ile mount eder ve ardından iki slot kaydeder:
 
@@ -105,6 +114,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 - Plugin, host dosya sistemini **Harness sürecinin kendi ayrıcalıklarıyla** okur: onu çalıştıran hesabın okuyabildiği her şeyi okuyabilir. Bu, bir host dosya gezgininin doğasında yer alan bir durumdur; bu yüzden yalnızca güvendiğiniz makinelerde ve hesaplarda etkinleştirin.
 - Plugin **salt okunurdur ve klasör oluşturma yeteneğine sahiptir**. Dosya yazamaz, silemez, yeniden adlandıramaz veya izinleri değiştiremez.
 - Tek bir liste en fazla 2000 girdi döndürür ve tek bir önizleme en fazla 256 KiB okur.
+- Tek bir indirme en fazla Harness'ın ek bayt sınırını (varsayılan 20 MiB) taşır; sınır aşılırsa panel önce nedenini söyler.
 
 ## Geliştirme
 

@@ -14,12 +14,14 @@
 
 ---
 
-Harness 안에서 호스트 컴퓨터의 파일 시스템을 탐색할 수 있습니다. 종류, 크기, 수정 시간이 표시되는 디렉터리 목록, 텍스트 파일 미리보기, 폴더 생성을 제공합니다. 모든 읽기 작업은 에이전트 자체의 파일 시스템 도구가 사용하는 것과 동일한 경계인 Host/Client Remote 채널을 거칩니다.
+Harness 안에서 호스트 컴퓨터의 파일 시스템을 탐색할 수 있습니다. 종류, 크기, 수정 시간이 표시되는 디렉터리 목록, 텍스트 파일 미리보기, 폴더 생성을 제공합니다. 모든 읽기 작업은 에이전트 자체의 파일 시스템 도구가 사용하는 것과 동일한 경계인 Host/Client Remote 채널을 거칩니다.파일은 브라우저로 다운로드할 수 있고, 이미지는 인라인으로 미리 볼 수 있습니다.
 
 ## 기능
 
 | 기능 | 설명 |
 | --- | --- |
+| 파일 다운로드 | Harness가 제공하는 인증된 파일 경로를 통해 파일 이름을 그대로 브라우저로 넘긴다 |
+| 이미지 미리 보기 | PNG, JPEG, GIF, WebP, AVIF, SVG 등의 이미지를 텍스트로 읽지 않고 인라인으로 보여준다 |
 | 디렉터리 목록 | 디렉터리를 먼저, 그다음 파일을 나열하며 각 항목에 크기와 수정 시간을 함께 표시합니다. 숨김 항목은 흐리게 표시됩니다 |
 | 경로 이동 | 절대 경로로 바로 이동하거나 상위 폴더로 이동할 수 있고, HOME, tmp, cwd, 파일 시스템 루트의 단축 경로를 사용할 수 있습니다 |
 | 파일 미리보기 | 텍스트 파일의 처음 256 KiB를 읽어 렌더링합니다. 바이너리 파일은 잡음을 출력하는 대신 스스로를 알립니다 |
@@ -67,7 +69,7 @@ dsh plugin --profile web add /path/to/dsh-host-file-explorer
 이 plugin은 Host 절반과 Client 절반으로 이루어진 표준 DSH bundle입니다:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | 메서드 | 매개변수 | 반환값 |
 | --- | --- | --- |
 | `roots()` | — | 잘 알려진 위치(HOME, tmp, cwd, 파일 시스템 루트) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | 한 번의 다운로드가 담을 수 있는 최대 파일 크기 |
 
 `signal`은 반드시 마지막 매개변수여야 합니다: 게이트웨이는 `Function.prototype.toString()`으로 메서드 시그니처를 파싱해 와이어 매개변수를 도출하며, 시그니처가 깨져 있으면 호출이 실패합니다.
+
+### 파일이 브라우저에 닿는 방식
+
+페이지는 파일의 바이트를 Remote 채널로 옮기지 않는다. Harness가 제공하는 인증된 파일 경로에서 그 파일의 주소를 Host에 물어보고, 브라우저는 페이지가 이미 가지고 있는 세션으로 가져온다. 바로 공식 문서 미리 보기가 Markdown 안의 이미지를 읽을 때 쓰는 경로다. 덕분에 다운로드는 파일 이름을 그대로 유지하고, 미리 보기는 파일 자체의 콘텐츠 형식을 받아 PNG는 PNG로 그려진다.
+
+한 번의 응답은 Harness의 첨부 바이트 한도(기본 20 MiB)로 제한된다. 페이지는 이 숫자를 Host에서 읽어, 한도를 넘는 다운로드는 실패할 전송을 시작하는 대신 이유를 알려주며 거절한다.
 
 **Client 절반**은 Typert Remote 기여를 직접 작성하고 `ctx.remote.$mount(...)`로 마운트한 다음, 두 개의 슬롯을 등록합니다:
 
@@ -105,6 +114,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 - 이 plugin은 **Harness 프로세스 자체의 권한**으로 호스트 파일 시스템을 읽습니다: 즉, 실행 중인 계정이 읽을 수 있는 모든 내용을 읽을 수 있습니다. 이는 호스트 파일 탐색기 본연의 성질이므로 신뢰할 수 있는 컴퓨터와 계정에서만 활성화하세요.
 - 이 plugin은 **읽기 전용에 더해 폴더 생성만** 할 수 있습니다. 파일 쓰기, 삭제, 이름 변경, 권한 변경은 할 수 없습니다.
 - 한 번의 목록 조회로 최대 2000개의 항목이 반환되며, 한 번의 미리보기는 최대 256 KiB를 읽습니다.
+- 한 번의 다운로드가 담는 크기는 Harness의 첨부 바이트 한도(기본 20 MiB)까지이며, 넘으면 패널이 먼저 이유를 알려준다.
 
 ## 개발
 

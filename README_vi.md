@@ -14,12 +14,14 @@
 
 ---
 
-Duyệt hệ thống tệp của máy host từ bên trong Harness: danh sách thư mục kèm loại, kích thước và thời gian sửa đổi, xem trước tệp văn bản và tạo thư mục. Mọi lượt đọc đều đi qua kênh Host/Client Remote, cùng ranh giới mà các công cụ hệ thống tệp của chính agent sử dụng.
+Duyệt hệ thống tệp của máy host từ bên trong Harness: danh sách thư mục kèm loại, kích thước và thời gian sửa đổi, xem trước tệp văn bản và tạo thư mục. Mọi lượt đọc đều đi qua kênh Host/Client Remote, cùng ranh giới mà các công cụ hệ thống tệp của chính agent sử dụng. Tệp có thể tải xuống trình duyệt, và hình ảnh được xem trước ngay tại chỗ.
 
 ## Tính năng
 
 | Tính năng | Mô tả |
 | --- | --- |
+| Tải tệp xuống | Đưa tệp tới trình duyệt qua tuyến tệp có xác thực của Harness, giữ nguyên tên tệp |
+| Xem trước hình ảnh | Hiển thị trực tiếp PNG, JPEG, GIF, WebP, AVIF hoặc SVG thay vì đọc như văn bản |
 | Danh sách thư mục | Thư mục trước, rồi đến tệp, mỗi mục kèm kích thước và thời gian sửa đổi; các mục ẩn được hiển thị mờ |
 | Điều hướng đường dẫn | Nhảy đến một đường dẫn tuyệt đối, lên thư mục cha, hoặc dùng các phím tắt cho HOME, tmp, cwd và thư mục gốc của hệ thống tệp |
 | Xem trước tệp | Đọc 256 KiB đầu tiên của một tệp văn bản và hiển thị nội dung đó; tệp nhị phân sẽ báo rõ thay vì in ra dữ liệu rác |
@@ -67,7 +69,7 @@ Sau khi cài đặt, một **biểu tượng thư mục** xuất hiện trên th
 Plugin này là một bundle DSH tiêu chuẩn, gồm một nửa Host và một nửa Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | Phương thức | Tham số | Trả về |
 | --- | --- | --- |
 | `roots()` | — | Các vị trí quen thuộc (HOME, tmp, cwd, thư mục gốc của hệ thống tệp) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | Kích thước tệp lớn nhất mà một lần tải xuống có thể mang |
 
 `signal` phải là tham số cuối cùng: gateway phân tích chữ ký của phương thức bằng `Function.prototype.toString()` để suy ra các tham số trên wire, và một chữ ký sai lệch sẽ khiến lời gọi thất bại.
+
+### Tệp đến với trình duyệt bằng cách nào
+
+Trang không bao giờ mang byte tệp qua kênh Remote. Nó hỏi Host địa chỉ của tệp trên tuyến tệp có xác thực của chính Harness — cùng tuyến mà bộ xem trước tài liệu đi kèm dùng cho các hình ảnh bên trong tài liệu Markdown — rồi trình duyệt tải tệp bằng phiên làm việc mà trang đã có. Nhờ vậy, lần tải xuống giữ nguyên tên tệp, còn phần xem trước nhận đúng kiểu nội dung của tệp, nên một tệp PNG được hiển thị đúng như PNG.
+
+Một câu trả lời bị giới hạn bởi giới hạn byte đính kèm của Harness (mặc định 20 MiB). Trang đọc con số này từ Host và từ chối lần tải xuống quá lớn kèm lời giải thích, thay vì bắt đầu một lần truyền chắc chắn thất bại.
 
 **Nửa Client** tự viết một contribution Remote của Typert, mount nó bằng `ctx.remote.$mount(...)`, rồi đăng ký hai slot:
 
@@ -105,6 +114,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 - Plugin đọc hệ thống tệp của host với **quyền của chính tiến trình Harness**: nó có thể đọc mọi thứ mà tài khoản đang chạy nó có quyền đọc. Điều này là đặc tính cố hữu của một trình duyệt tệp trên host, vì vậy chỉ hãy bật nó trên những máy và tài khoản mà bạn tin tưởng.
 - Plugin **chỉ đọc, cộng thêm tạo thư mục**. Nó không thể ghi tệp, xóa, đổi tên hay thay đổi quyền.
 - Một lần liệt kê trả về nhiều nhất 2000 mục, và một lần xem trước đọc nhiều nhất 256 KiB.
+- Một lần tải xuống chỉ mang tối đa giới hạn byte đính kèm của Harness (mặc định 20 MiB); nếu vượt quá, bảng điều khiển sẽ nói rõ lý do trước.
 
 ## Phát triển
 

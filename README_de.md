@@ -14,12 +14,14 @@
 
 ---
 
-Durchsuchen Sie das Dateisystem des Host-Rechners direkt aus dem Harness heraus: Verzeichnislisten mit Arten, Größen und Änderungszeiten, Vorschauen von Textdateien und das Anlegen von Ordnern. Jeder Lesezugriff läuft über den Host/Client Remote-Kanal – dieselbe Grenze, die auch die eigenen Dateisystem-Tools des Agenten verwenden.
+Durchsuchen Sie das Dateisystem des Host-Rechners direkt aus dem Harness heraus: Verzeichnislisten mit Arten, Größen und Änderungszeiten, Vorschauen von Textdateien und das Anlegen von Ordnern. Jeder Lesezugriff läuft über den Host/Client Remote-Kanal – dieselbe Grenze, die auch die eigenen Dateisystem-Tools des Agenten verwenden. Dateien lassen sich in den Browser herunterladen, Bilder werden direkt in der Leiste angezeigt.
 
 ## Funktionen
 
 | Funktion | Beschreibung |
 | --- | --- |
+| Datei-Download | Übergibt die Datei über die authentifizierte Dateiroute des Harness an den Browser, unter ihrem eigenen Namen |
+| Bildvorschau | Zeigt PNG, JPEG, GIF, WebP, AVIF oder SVG direkt an, statt sie als Text zu lesen |
 | Verzeichnisliste | Verzeichnisse zuerst, dann Dateien, jede mit Größe und Änderungszeit; verborgene Einträge sind abgeblendet |
 | Pfadnavigation | Springen Sie zu einem absoluten Pfad, wechseln Sie zum übergeordneten Verzeichnis oder nutzen Sie die Sprünge für HOME, tmp, cwd und das Wurzelverzeichnis des Dateisystems |
 | Dateivorschau | Liest die ersten 256 KiB einer Textdatei und stellt sie dar; Binärdateien melden sich selbst, statt Unleserliches auszugeben |
@@ -67,7 +69,7 @@ Nach der Installation erscheint ein **Ordnersymbol** in der Seitenleiste, hinter
 Das plugin ist ein Standard-DSH-Bundle mit einer Host-Hälfte und einer Client-Hälfte:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ Die **Host-Hälfte** stellt einen `ctx.hostFiles`-Service bereit und markiert de
 | Methode | Parameter | Rückgabe |
 | --- | --- | --- |
 | `roots()` | — | Bekannte Orte (HOME, tmp, cwd, Wurzelverzeichnis des Dateisystems) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | Die größte Datei, die ein Download tragen darf |
 
 `signal` muss der letzte Parameter sein: Das Gateway parst die Methodensignatur mit `Function.prototype.toString()`, um die Wire-Parameter abzuleiten, und eine fehlerhafte Signatur lässt den Aufruf scheitern.
+
+### Wie Dateien in den Browser gelangen
+
+Die Seite transportiert Dateibytes nie über den Remote-Kanal. Sie fragt den Host nach der Adresse der Datei auf der eigenen authentifizierten Dateiroute des Harness — dieselbe, die die mitgelieferte Dokumentvorschau für Bilder in Markdown-Dokumenten nutzt — und der Browser lädt sie mit der Sitzung, die die Seite bereits hält. So behält ein Download den eigenen Dateinamen, und eine Vorschau erhält den eigentlichen Inhaltstyp: ein PNG wird als PNG gezeichnet.
+
+Eine Antwort ist durch das Anhangs-Byte-Limit des Harness begrenzt (standardmäßig 20 MiB). Die Seite liest diese Zahl beim Host ab und lehnt einen zu großen Download mit einer Erklärung ab, statt eine Übertragung zu starten, die ohnehin scheitern würde.
 
 Die **Client-Hälfte** schreibt einen Typert-Remote-Beitrag von Hand, bindet ihn mit `ctx.remote.$mount(...)` ein und registriert anschließend zwei Slots:
 
@@ -105,6 +114,7 @@ Die **Client-Hälfte** schreibt einen Typert-Remote-Beitrag von Hand, bindet ihn
 - Das plugin liest das Dateisystem des Hosts mit den **Rechten des Harness-Prozesses selbst**: Es kann alles lesen, was das Konto, das ihn ausführt, lesen kann. Das liegt im Wesen eines Host-Dateiexplorers, aktivieren Sie ihn daher nur auf Rechnern und Konten, denen Sie vertrauen.
 - Das plugin ist **nur lesend, ergänzt um das Anlegen von Ordnern**. Es kann keine Dateien schreiben, löschen, umbenennen oder deren Rechte ändern.
 - Eine Liste liefert höchstens 2000 Einträge, und eine Vorschau liest höchstens 256 KiB.
+- Ein Download trägt höchstens das Anhangs-Byte-Limit des Harness (standardmäßig 20 MiB); bei Überschreitung erklärt die Leiste zuerst den Grund.
 
 ## Entwicklung
 

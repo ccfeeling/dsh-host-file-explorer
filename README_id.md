@@ -14,12 +14,14 @@
 
 ---
 
-Jelajahi sistem berkas mesin host dari dalam Harness: daftar direktori beserta jenis, ukuran, dan waktu modifikasinya, pratinjau berkas teks, serta pembuatan folder. Setiap pembacaan melewati kanal Remote Host/Client, batas yang sama dengan yang dipakai oleh alat sistem berkas milik agent itu sendiri.
+Jelajahi sistem berkas mesin host dari dalam Harness: daftar direktori beserta jenis, ukuran, dan waktu modifikasinya, pratinjau berkas teks, serta pembuatan folder. Setiap pembacaan melewati kanal Remote Host/Client, batas yang sama dengan yang dipakai oleh alat sistem berkas milik agent itu sendiri. File dapat diunduh ke peramban, dan gambar dapat dipratinjau langsung di panel.
 
 ## Fitur
 
 | Fitur | Deskripsi |
 | --- | --- |
+| Unduh file | menyerahkan file ke peramban melalui rute berkas terautentikasi milik Harness sendiri, dengan nama file aslinya |
+| Pratinjau gambar | Menampilkan gambar PNG, JPEG, GIF, WebP, AVIF, atau SVG secara langsung, bukan membacanya sebagai teks |
 | Daftar direktori | Direktori ditampilkan lebih dahulu, lalu berkas; masing-masing dilengkapi ukuran dan waktu modifikasi; entri tersembunyi ditampilkan redup |
 | Navigasi path | Lompat ke path absolut, naik ke direktori induk, atau gunakan pintasan untuk HOME, tmp, cwd, dan root sistem berkas |
 | Pratinjau berkas | Membaca 256 KiB pertama dari berkas teks lalu menampilkannya; berkas biner melaporkan dirinya sendiri alih-alih mencetak keluaran berantakan |
@@ -67,7 +69,7 @@ Setelah pemasangan, sebuah **ikon folder** muncul di sidebar, setelah Plugins da
 Plugin ini adalah bundle DSH standar dengan separuh Host dan separuh Client:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 | Metode | Parameter | Hasil |
 | --- | --- | --- |
 | `roots()` | — | Lokasi umum (HOME, tmp, cwd, root sistem berkas) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | Berkas terbesar yang boleh diangkut satu unduhan |
 
 `signal` harus menjadi parameter terakhir: gateway mengurai tanda tangan method dengan `Function.prototype.toString()` untuk menurunkan parameter wire, dan tanda tangan yang rusak membuat pemanggilan gagal.
+
+### Cara berkas sampai ke peramban
+
+Halaman tidak pernah mengangkut byte berkas lewat kanal Remote. Halaman bertanya ke Host tentang alamat berkas pada rute berkas terautentikasi milik Harness sendiri — rute yang sama dipakai pratinjau dokumen bawaan untuk gambar di dalam dokumen Markdown — lalu peramban mengambilnya dengan sesi yang sudah dimiliki halaman. Karena itu, unduhan tetap memakai nama berkas aslinya, dan pratinjau menerima tipe konten berkas yang sebenarnya, sehingga PNG digambar sebagai PNG.
+
+Satu jawaban dibatasi oleh batas byte lampiran Harness (20 MiB secara bawaan). Halaman membaca angka itu dari Host dan menolak unduhan yang terlalu besar dengan penjelasan, alih-alih memulai transfer yang pasti gagal.
 
 **Separuh Client** menulis secara manual sebuah kontribusi Typert Remote, memasangkannya dengan `ctx.remote.$mount(...)`, lalu mendaftarkan dua slot:
 
@@ -105,6 +114,7 @@ client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 - Plugin membaca sistem berkas host dengan **hak akses proses Harness itu sendiri**: ia dapat membaca semua yang dapat dibaca oleh akun yang menjalankannya. Hal ini melekat pada apa itu penjelajah file host, jadi hanya aktifkan di mesin dan akun yang Anda percaya.
 - Plugin bersifat **hanya-baca ditambah pembuatan folder**. Ia tidak dapat menulis berkas, menghapus, mengganti nama, atau mengubah izin.
 - Satu daftar mengembalikan paling banyak 2000 entri, dan satu pratinjau membaca paling banyak 256 KiB.
+- Satu unduhan mengangkut paling banyak batas byte lampiran Harness (20 MiB secara bawaan); bila terlampaui, panel menjelaskan alasannya lebih dulu.
 
 ## Pengembangan
 

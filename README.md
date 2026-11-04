@@ -14,12 +14,14 @@
 
 ---
 
-Browse the filesystem of the host machine from inside the Harness: directory listings with kinds, sizes, and modification times, text file previews, and folder creation. Every read goes through the Host/Client Remote channel, the same boundary the agent's own filesystem tools use.
+Browse the filesystem of the host machine from inside the Harness: directory listings with kinds, sizes, and modification times, text file previews, and folder creation. Every read goes through the Host/Client Remote channel, the same boundary the agent's own filesystem tools use. Files can be downloaded into the browser, and images are previewed inline.
 
 ## Features
 
 | Feature | Description |
 | --- | --- |
+| File download | Hands the file to the browser through the Harness's authenticated file route, under the file's own name |
+| Image preview | Shows a PNG, JPEG, GIF, WebP, AVIF, or SVG image inline, instead of reading it as text |
 | Directory listing | Directories first, then files, each with size and modification time; hidden entries are dimmed |
 | Path navigation | Jump to an absolute path, go to the parent, or use the shortcuts for HOME, tmp, cwd, and the filesystem root |
 | File preview | Reads the first 256 KiB of a text file and renders it; binary files report themselves instead of printing noise |
@@ -67,7 +69,7 @@ After installation a **folder icon** appears in the sidebar, after Plugins and S
 The plugin is a standard DSH bundle with a Host half and a Client half:
 
 ```
-index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+index.js   (Host)    ctx.hostFiles  ——  six verbs over node:fs/promises
 client.js  (Client)  sidebar entry + main panel + Remote namespace mount
 ```
 
@@ -76,12 +78,19 @@ The **Host half** provides a `ctx.hostFiles` service and marks its verbs for the
 | Method | Parameters | Returns |
 | --- | --- | --- |
 | `roots()` | — | Well-known locations (HOME, tmp, cwd, filesystem root) |
-| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
-| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[{ name, path, kind, size, modified, mime, hidden }], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified, mime }` |
 | `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
 | `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+| `limits()` | — | The largest file one download may carry |
 
 `signal` has to be the last parameter: the gateway parses the method signature with `Function.prototype.toString()` to derive the wire parameters, and a broken signature makes the call fail.
+
+### How files reach the browser
+
+The page never carries file bytes over the Remote channel. It asks the Host for the file's address on the Harness's own authenticated file route — the same route the shipped document preview uses for the images inside a Markdown document — and the browser fetches it with the session the page already holds. A download keeps the file's own name, and a preview gets the file's own content type, so a PNG renders as a PNG.
+
+One response is bounded by the Harness's attachment byte limit (20 MiB by default). The page reads that number from the Host and refuses an oversized download with an explanation, instead of starting a transfer that would fail.
 
 The **Client half** hand-writes a Typert Remote contribution, mounts it with `ctx.remote.$mount(...)`, and then registers two slots:
 
@@ -105,6 +114,7 @@ The **Client half** hand-writes a Typert Remote contribution, mounts it with `ct
 - The plugin reads the host filesystem with the **privileges of the Harness process itself**: it can read everything the account running it can read. That is inherent to what a host file explorer is, so only enable it on machines and accounts you trust.
 - The plugin is **read-only plus folder creation**. It cannot write files, delete, rename, or change permissions.
 - One listing returns at most 2000 entries, and one preview reads at most 256 KiB.
+- One download carries at most the Harness's attachment byte limit (20 MiB by default); the panel says so before it starts an oversized transfer.
 
 ## Development
 

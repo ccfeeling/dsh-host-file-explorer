@@ -34,10 +34,78 @@ const MAX_ENTRIES = 2000;
 /** The largest file prefix one preview reads. */
 const MAX_PREVIEW_BYTES = 256 * 1024;
 
+/**
+ * The byte limit the browser's file route enforces, when no attachment
+ * service states one.
+ *
+ * The route the page downloads through is served by the Harness itself, and
+ * it bounds one response with the attachment image limit. The page learns the
+ * real number from {@link HostFiles.limits} so it can refuse an oversized
+ * download before the browser starts one.
+ */
+const DEFAULT_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * The content types the page tells images apart by.
+ *
+ * The browser's file route decides the served type by extension, so the page
+ * reads the same table to know in advance which files can be shown as an
+ * image. Anything unknown is served as a plain byte stream.
+ */
+const MIME_TYPES = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff',
+  '.heic': 'image/heic',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.json': 'application/json',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.ts': 'text/plain',
+  '.css': 'text/css',
+  '.html': 'text/html',
+  '.htm': 'text/html',
+  '.xml': 'application/xml',
+  '.yaml': 'text/yaml',
+  '.yml': 'text/yaml',
+  '.toml': 'text/plain',
+  '.csv': 'text/csv',
+  '.log': 'text/plain',
+  '.sh': 'text/x-shellscript',
+  '.pdf': 'application/pdf',
+  '.zip': 'application/zip',
+  '.gz': 'application/gzip',
+  '.tar': 'application/x-tar',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+};
+
 /** The file kind a directory entry carries over the wire. */
 const KIND_FILE = 'file';
 const KIND_DIRECTORY = 'directory';
 const KIND_OTHER = 'other';
+
+/**
+ * The content type one file name implies.
+ *
+ * @param name - the file name or path.
+ * @returns the content type, or undefined when the extension is unknown.
+ */
+function mimeFor(name) {
+  const extension = parse(String(name)).ext.toLowerCase();
+  return MIME_TYPES[extension];
+}
 
 /**
  * The host filesystem service.
@@ -108,6 +176,7 @@ class HostFiles {
         kind,
         size,
         modified,
+        mime: kind === KIND_FILE ? mimeFor(dirent.name) : undefined,
         hidden: dirent.name.startsWith('.'),
       });
     }
@@ -136,12 +205,30 @@ class HostFiles {
     const target = this.resolve(path);
     if (signal?.aborted === true) throw new Error('the probe was cancelled');
     const info = await statPath(target);
+    const kind = info.isDirectory() ? KIND_DIRECTORY : info.isFile() ? KIND_FILE : KIND_OTHER;
     return {
       path: target,
-      kind: info.isDirectory() ? KIND_DIRECTORY : info.isFile() ? KIND_FILE : KIND_OTHER,
+      kind,
       size: info.size,
       modified: info.mtimeMs,
+      mime: kind === KIND_FILE ? mimeFor(parse(target).base) : undefined,
     };
+  }
+
+  /**
+   * The limits the page has to respect when it hands a file to the browser.
+   *
+   * The browser downloads through the Harness's own file route, and that route
+   * bounds one response. The attachment service owns the number; the page
+   * reads it here so it can refuse an oversized file instead of starting a
+   * download that would fail halfway.
+   *
+   * @returns the largest file one download may carry.
+   */
+  async limits() {
+    const attachments = this.ctx.get('attachments');
+    const stated = attachments?.imageLimits?.maxImageBytes;
+    return { maxBytes: typeof stated === 'number' && stated > 0 ? stated : DEFAULT_MAX_BYTES };
   }
 
   /**
@@ -230,7 +317,7 @@ Object.defineProperty(HostFiles.prototype, REMOTE_METHODS, {
   value: Object.freeze({
     version: 1,
     methods: Object.freeze(
-      ['roots', 'list', 'stat', 'read', 'mkdir'].map((method) =>
+      ['roots', 'list', 'stat', 'read', 'mkdir', 'limits'].map((method) =>
         Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) }),
       ),
     ),

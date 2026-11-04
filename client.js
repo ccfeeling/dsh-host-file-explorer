@@ -50,6 +50,7 @@ window.__ModuleLoader__.load({
       'action.newFolder': 'New folder',
       'action.create': 'Create',
       'action.cancel': 'Cancel',
+      'action.download': 'Download',
       'label.path': 'Path',
       'label.name': 'Name',
       'label.kind': 'Kind',
@@ -60,6 +61,8 @@ window.__ModuleLoader__.load({
       'label.noPreview': 'Select a file to preview its contents.',
       'label.binary': 'This file is not text; no preview is available.',
       'label.truncated': 'Only the first part of this file is shown.',
+      'label.imageFailed': 'This image could not be displayed.',
+      'label.tooLarge': 'This file is larger than one download may carry.',
       'state.loading': 'Reading the directory…',
       'state.empty': 'This directory is empty.',
       'state.truncated': 'This directory holds more entries than are listed.',
@@ -79,6 +82,7 @@ window.__ModuleLoader__.load({
       'action.newFolder': '新建文件夹',
       'action.create': '创建',
       'action.cancel': '取消',
+      'action.download': '下载',
       'label.path': '路径',
       'label.name': '名称',
       'label.kind': '类型',
@@ -89,6 +93,8 @@ window.__ModuleLoader__.load({
       'label.noPreview': '选择一个文件以预览其内容。',
       'label.binary': '该文件不是文本，无法预览。',
       'label.truncated': '仅显示了该文件的前一部分内容。',
+      'label.imageFailed': '无法显示该图片。',
+      'label.tooLarge': '该文件超过单次下载的大小上限。',
       'state.loading': '正在读取目录…',
       'state.empty': '该目录为空。',
       'state.truncated': '该目录的条目多于已列出的数量。',
@@ -103,6 +109,7 @@ window.__ModuleLoader__.load({
       kind: z.enum(['file', 'directory', 'other']),
       size: z.number().optional(),
       modified: z.number().optional(),
+      mime: z.string().optional(),
       hidden: z.boolean(),
     });
 
@@ -187,6 +194,7 @@ window.__ModuleLoader__.load({
               kind: z.enum(['file', 'directory', 'other']),
               size: z.number().optional(),
               modified: z.number().optional(),
+              mime: z.string().optional(),
             }),
           },
         },
@@ -257,6 +265,19 @@ window.__ModuleLoader__.load({
             create: () => z.object({ path: z.string() }),
           },
         },
+        {
+          id: '@local/dsh-host-file-explorer#hostFiles/limits',
+          service: NAMESPACE,
+          namespace: NAMESPACE,
+          method: 'limits',
+          invocation: { kind: 'direct' },
+          parameters: [],
+          result: {
+            mode: 'strict',
+            typeSymbol: '@local/dsh-host-file-explorer#hostFiles/limits:result',
+            create: () => z.object({ maxBytes: z.number() }),
+          },
+        },
       ],
     };
 
@@ -278,6 +299,34 @@ window.__ModuleLoader__.load({
     function formatTime(modified) {
       if (typeof modified !== 'number' || !Number.isFinite(modified)) return '';
       return new Date(modified).toLocaleString();
+    }
+
+    /**
+     * The address one host file is served under.
+     *
+     * The Harness serves host files to the page over its own authenticated
+     * file route, so the browser may fetch the bytes with the same session the
+     * page already holds. The route answers with the file's own content type,
+     * which is what lets an image be shown and a download keep its name.
+     *
+     * @param path - the absolute host path.
+     * @returns the file's URL, or undefined when the page has no address base.
+     */
+    function fileUrl(path) {
+      if (typeof document === 'undefined') return undefined;
+      const base = document.baseURI;
+      if (typeof base !== 'string' || base.length === 0) return undefined;
+      return new URL(`api/file?path=${encodeURIComponent(path)}`, base).href;
+    }
+
+    /**
+     * Whether one file can be shown as an image.
+     *
+     * @param mime - the content type the host reported.
+     * @returns true when the browser may render the file inline.
+     */
+    function isImage(mime) {
+      return typeof mime === 'string' && mime.startsWith('image/');
     }
 
     /** The sidebar's button glyph: a folder, filled while its panel is open. */
@@ -315,6 +364,8 @@ window.__ModuleLoader__.load({
       const [creating, setCreating] = useState(false);
       const [createError, setCreateError] = useState('');
       const [revision, setRevision] = useState(0);
+      const [maxBytes, setMaxBytes] = useState(null);
+      const [imageFailed, setImageFailed] = useState(false);
       const listingRequest = useRef(0);
       const previewRequest = useRef(0);
 
@@ -322,6 +373,16 @@ window.__ModuleLoader__.load({
         let cancelled = false;
         api.roots().then((paths) => {
           if (!cancelled) setRoots(paths);
+        }).catch(() => {});
+        return () => {
+          cancelled = true;
+        };
+      }, [api]);
+
+      useEffect(() => {
+        let cancelled = false;
+        api.limits().then((result) => {
+          if (!cancelled) setMaxBytes(result.maxBytes);
         }).catch(() => {});
         return () => {
           cancelled = true;
@@ -359,11 +420,16 @@ window.__ModuleLoader__.load({
       const select = useCallback((entry) => {
         setSelected(entry);
         setPreview(null);
+        setImageFailed(false);
         if (entry.kind !== 'file') {
           setPreviewStatus('idle');
           return;
         }
         const request = ++previewRequest.current;
+        if (isImage(entry.mime)) {
+          setPreviewStatus('image');
+          return;
+        }
         setPreviewStatus('loading');
         api.read(entry.path).then((result) => {
           if (request !== previewRequest.current) return;
@@ -391,6 +457,30 @@ window.__ModuleLoader__.load({
           setCreateError(cause?.message ?? String(cause));
         });
       }, [api, directory, folderName, refresh]);
+
+      /**
+       * Hand one file to the browser as a download.
+       *
+       * The bytes travel over the Harness's own authenticated file route, so
+       * the browser saves them under the name the listing shows.
+       */
+      const download = useCallback((entry) => {
+        const url = fileUrl(entry.path);
+        if (url === undefined) return;
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = entry.name;
+        anchor.rel = 'noopener';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }, []);
+
+      /** Whether one file is larger than a single download may carry. */
+      const tooLarge = useCallback((entry) => {
+        if (maxBytes === null || typeof entry.size !== 'number') return false;
+        return entry.size > maxBytes;
+      }, [maxBytes]);
 
       const current = listing?.path ?? directory;
       const rows = listing?.entries ?? [];
@@ -560,11 +650,51 @@ window.__ModuleLoader__.load({
           : h('div', {
             style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)', wordBreak: 'break-all' },
           }, selected.path),
+        selected !== null && selected.kind === 'file'
+          ? h('div', {
+            style: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+          },
+            h('button', {
+              type: 'button',
+              onClick: () => download(selected),
+              disabled: tooLarge(selected),
+              style: buttonStyle,
+            }, t('action.download')),
+            tooLarge(selected)
+              ? h('span', { style: { ...noteStyle, padding: 0 } }, `${t('label.tooLarge')} (${formatBytes(maxBytes)})`)
+              : null)
+          : null,
         previewStatus === 'loading'
           ? h('div', { style: noteStyle }, t('state.loading'))
           : null,
         previewStatus === 'error'
           ? h('div', { style: { ...noteStyle, color: 'var(--dsw-alias-state-error-primary)' } }, error)
+          : null,
+        previewStatus === 'image'
+          ? h('div', {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              alignItems: 'flex-start',
+            },
+          },
+            h('img', {
+              src: fileUrl(selected?.path ?? '') ?? '',
+              alt: selected?.name ?? '',
+              onError: () => setImageFailed(true),
+              style: {
+                maxWidth: '100%',
+                maxHeight: 360,
+                objectFit: 'contain',
+                borderRadius: 8,
+                border: '1px solid var(--dsw-alias-border-l1)',
+                background: 'var(--dsw-alias-bg-layer-2)',
+              },
+            }),
+            imageFailed
+              ? h('div', { style: { ...noteStyle, color: 'var(--dsw-alias-state-error-primary)' } }, t('label.imageFailed'))
+              : null)
           : null,
         preview?.binary
           ? h('div', { style: noteStyle }, t('label.binary'))
@@ -732,6 +862,7 @@ window.__ModuleLoader__.load({
         stat: (path) => call('stat', [path]),
         read: (path) => call('read', [path]),
         mkdir: (path, name) => call('mkdir', [path, name]),
+        limits: () => call('limits', []),
       };
 
       ctx.effect(() => () => {
