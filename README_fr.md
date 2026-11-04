@@ -16,6 +16,8 @@
 
 Parcourez le système de fichiers de la machine Host depuis le Harness : listes de répertoires avec types, tailles et dates de modification, aperçus de fichiers texte et création de dossiers. Chaque lecture passe par le canal Remote Host/Client, la même frontière que celle qu'utilisent les outils de système de fichiers de l'agent lui-même. Les fichiers peuvent être téléchargés dans le navigateur, et les images sont prévisualisées directement.
 
+![Panneau des fichiers de l’hôte](assets/screenshot-1.png)
+
 ## Fonctionnalités
 
 | Fonctionnalité | Description |

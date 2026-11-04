@@ -16,6 +16,8 @@
 
 Sfoglia il file system della macchina host dall'interno dell'Harness: elenchi di directory con tipo, dimensione e data di modifica, anteprime dei file di testo e creazione di cartelle. Ogni lettura passa dal canale Remote Host/Client, lo stesso confine che usano gli strumenti del file system dell'agente stesso. I file si possono scaricare nel browser e le immagini si visualizzano direttamente nel riquadro.
 
+![Pannello dei file dell’host](assets/screenshot-1.png)
+
 ## Funzionalità
 
 | Funzionalità | Descrizione |

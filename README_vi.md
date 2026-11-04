@@ -16,6 +16,8 @@
 
 Duyệt hệ thống tệp của máy host từ bên trong Harness: danh sách thư mục kèm loại, kích thước và thời gian sửa đổi, xem trước tệp văn bản và tạo thư mục. Mọi lượt đọc đều đi qua kênh Host/Client Remote, cùng ranh giới mà các công cụ hệ thống tệp của chính agent sử dụng. Tệp có thể tải xuống trình duyệt, và hình ảnh được xem trước ngay tại chỗ.
 
+![Bảng tệp máy chủ](assets/screenshot-1.png)
+
 ## Tính năng
 
 | Tính năng | Mô tả |

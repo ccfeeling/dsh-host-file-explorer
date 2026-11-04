@@ -16,6 +16,8 @@
 
 Durchsuchen Sie das Dateisystem des Host-Rechners direkt aus dem Harness heraus: Verzeichnislisten mit Arten, Größen und Änderungszeiten, Vorschauen von Textdateien und das Anlegen von Ordnern. Jeder Lesezugriff läuft über den Host/Client Remote-Kanal – dieselbe Grenze, die auch die eigenen Dateisystem-Tools des Agenten verwenden. Dateien lassen sich in den Browser herunterladen, Bilder werden direkt in der Leiste angezeigt.
 
+![Host-Dateien-Bereich](assets/screenshot-1.png)
+
 ## Funktionen
 
 | Funktion | Beschreibung |

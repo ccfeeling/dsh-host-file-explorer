@@ -16,6 +16,8 @@
 
 Navegue pelo sistema de arquivos da máquina host de dentro do Harness: listagens de diretórios com tipos, tamanhos e horários de modificação, prévias de arquivos de texto e criação de pastas. Toda leitura passa pelo canal Remote Host/Client, o mesmo limite que as ferramentas de sistema de arquivos do próprio agente usam. Os arquivos podem ser baixados para o navegador e as imagens são pré-visualizadas na própria página.
 
+![Painel de arquivos do host](assets/screenshot-1.png)
+
 ## Recursos
 
 | Recurso | Descrição |

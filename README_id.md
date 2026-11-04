@@ -16,6 +16,8 @@
 
 Jelajahi sistem berkas mesin host dari dalam Harness: daftar direktori beserta jenis, ukuran, dan waktu modifikasinya, pratinjau berkas teks, serta pembuatan folder. Setiap pembacaan melewati kanal Remote Host/Client, batas yang sama dengan yang dipakai oleh alat sistem berkas milik agent itu sendiri. File dapat diunduh ke peramban, dan gambar dapat dipratinjau langsung di panel.
 
+![Panel file host](assets/screenshot-1.png)
+
 ## Fitur
 
 | Fitur | Deskripsi |

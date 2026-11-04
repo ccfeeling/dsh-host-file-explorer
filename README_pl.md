@@ -16,6 +16,8 @@
 
 Przeglądaj system plików maszyny Host z wnętrza Harness: listy katalogów z rodzajami, rozmiarami i czasami modyfikacji, podgląd plików tekstowych oraz tworzenie folderów. Każdy odczyt przechodzi przez kanał Remote Host/Client — tę samą granicę, której używają własne narzędzia systemu plików agenta. Pliki można pobrać do przeglądarki, a obrazy wyświetlać w miejscu.
 
+![Пanel plików hosta](assets/screenshot-1.png)
+
 ## Funkcje
 
 | Funkcja | Opis |

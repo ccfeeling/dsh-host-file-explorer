@@ -16,6 +16,8 @@
 
 Browse the filesystem of the host machine from inside the Harness: directory listings with kinds, sizes, and modification times, text file previews, and folder creation. Every read goes through the Host/Client Remote channel, the same boundary the agent's own filesystem tools use. Files can be downloaded into the browser, and images are previewed inline.
 
+![Host files panel](assets/screenshot-1.png)
+
 ## Features
 
 | Feature | Description |

@@ -16,6 +16,8 @@
 
 Harness'in içinden host makinesinin dosya sisteminde gezin: türleri, boyutları ve değiştirilme zamanlarıyla birlikte dizin listeleri, metin dosyası önizlemeleri ve klasör oluşturma. Her okuma, agent'ın kendi dosya sistemi araçlarının kullandığı sınır olan Host/Client Remote kanalından geçer.Dosyalar tarayıcıya indirilebilir, görseller satır içinde önizlenebilir.
 
+![Host dosyaları paneli](assets/screenshot-1.png)
+
 ## Özellikler
 
 | Özellik | Açıklama |
