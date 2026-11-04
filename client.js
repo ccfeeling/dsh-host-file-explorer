@@ -320,13 +320,30 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The image extensions the page renders inline.
+     *
+     * The Host names each file's content type; this table only answers for a
+     * file the Host named no type for.
+     */
+    const IMAGE_EXTENSIONS = new Set([
+      'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg', 'tif', 'tiff', 'heic',
+    ]);
+
+    /**
      * Whether one file can be shown as an image.
      *
-     * @param mime - the content type the host reported.
+     * The Host names each file's content type, and the browser's file route
+     * serves the same type. When the Host named none, the extension decides,
+     * so a picture still previews while the Host half catches up.
+     *
+     * @param mime - the content type the Host reported, if any.
+     * @param name - the file name.
      * @returns true when the browser may render the file inline.
      */
-    function isImage(mime) {
-      return typeof mime === 'string' && mime.startsWith('image/');
+    function isImage(mime, name) {
+      if (typeof mime === 'string' && mime.length > 0) return mime.startsWith('image/');
+      const extension = String(name ?? '').split('.').pop()?.toLowerCase() ?? '';
+      return IMAGE_EXTENSIONS.has(extension);
     }
 
     /** The sidebar's button glyph: a folder, filled while its panel is open. */
@@ -426,7 +443,7 @@ window.__ModuleLoader__.load({
           return;
         }
         const request = ++previewRequest.current;
-        if (isImage(entry.mime)) {
+        if (isImage(entry.mime, entry.name)) {
           setPreviewStatus('image');
           return;
         }
