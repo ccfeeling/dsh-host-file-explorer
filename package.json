@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-host-file-explorer",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Host file explorer: a left-sidebar panel that browses the machine's filesystem, previews text and image files, downloads files, and creates folders.",
   "icon": "./icon.svg",
