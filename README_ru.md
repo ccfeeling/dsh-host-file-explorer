@@ -44,6 +44,14 @@ dsh plugin --profile web add /path/to/dsh-host-file-explorer
 
 Соответствующий вызов инструмента — `plugin_manager { action: 'install_bundle', target: '<local path>' }`.
 
+### Из маркетплейса плагинов
+
+Плагин включён в список [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin), поэтому маркетплейс может установить его прямо из GitHub:
+
+```bash
+dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
+```
+
 ### Как зависимость профиля
 
 ```jsonc

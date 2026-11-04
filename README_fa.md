@@ -44,6 +44,14 @@ dsh plugin --profile web add /path/to/dsh-host-file-explorer
 
 فراخوانی متناظر ابزار این است: `plugin_manager { action: 'install_bundle', target: '<local path>' }`.
 
+### از فروشگاه افزونه‌ها
+
+این افزونه در فهرست [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) ثبت شده است، بنابراین فروشگاه می‌تواند آن را مستقیماً از GitHub نصب کند:
+
+```bash
+dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
+```
+
 ### به‌عنوان وابستگی profile
 
 ```jsonc

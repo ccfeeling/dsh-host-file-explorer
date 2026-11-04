@@ -44,6 +44,14 @@ dsh plugin --profile web add /path/to/dsh-host-file-explorer
 
 Buna karşılık gelen araç çağrısı `plugin_manager { action: 'install_bundle', target: '<local path>' }`.
 
+### Plugin pazarından
+
+Bu eklenti [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) listesinde yer alıyor; pazar doğrudan GitHub üzerinden kurabilir:
+
+```bash
+dsh plugin --profile web add github:ccfeeling/dsh-host-file-explorer
+```
+
 ### Bir profil bağımlılığı olarak
 
 ```jsonc
