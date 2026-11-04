@@ -1,0 +1,121 @@
+<div align="center">
+
+[English](README.md) · [简体中文](README_zh.md) · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md) · [한국어](README_ko.md) · [Türkçe](README_tr.md) · **Русский** · [Tiếng Việt](README_vi.md) · [ไทย](README_th.md) · [Deutsch](README_de.md) · [Español](README_es.md) · [Français](README_fr.md) · [Українська](README_uk.md) · [Polski](README_pl.md) · [Português (Brasil)](README_pt-BR.md) · [العربية](README_ar.md) · [فارسی](README_fa.md) · [Bahasa Indonesia](README_id.md) · [Italiano](README_it.md)
+
+# DSH Host Обозреватель файлов
+
+### DeepSeek Harness plugin, добавляющий запись в левой боковой панели для просмотра файловой системы машины, на которой работает Harness.
+
+[![Лицензия MIT](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
+[![Запись в боковой панели](https://img.shields.io/badge/sidebar-entry-28-4CB1?style=flat-square)](#возможности)
+[![Транспорт](https://img.shields.io/badge/transport-Host%2FClient_Remote-4CB1?style=flat-square)](#архитектура)
+
+</div>
+
+---
+
+Просматривайте файловую систему машины Host изнутри Harness: списки каталогов с типами, размерами и временем изменения, предпросмотр текстовых файлов и создание папок. Каждое чтение проходит через канал Host/Client Remote — ту же границу, которую используют собственные инструменты работы с файловой системой агента.
+
+## Возможности
+
+| Возможность | Описание |
+| --- | --- |
+| Список каталогов | Сначала каталоги, затем файлы, каждый с размером и временем изменения; скрытые записи приглушены |
+| Навигация по путям | Переход по абсолютному пути, переход к родительскому каталогу или использование ярлыков для HOME, tmp, cwd и корня файловой системы |
+| Предпросмотр файла | Читает первые 256 KiB текстового файла и отображает их; двоичные файлы сообщают о себе, вместо того чтобы выводить мусор |
+| Создание папки | Создаёт подкаталог из одного сегмента внутри текущего каталога |
+| Двуязычный интерфейс | Каждая видимая строка проходит через `ctx.locale`, поэтому панель следует языку интерфейса |
+
+## Установка
+
+### С помощью менеджера plugin (рекомендуется)
+
+Клонируйте этот репозиторий, а затем установите его из менеджера plugin Harness:
+
+```bash
+# clone
+git clone https://github.com/ccfeeling/dsh-host-file-explorer.git
+
+# install into a DSH profile (replace the profile name and path with yours)
+dsh plugin --profile web add /path/to/dsh-host-file-explorer
+```
+
+Соответствующий вызов инструмента — `plugin_manager { action: 'install_bundle', target: '<local path>' }`.
+
+### Как зависимость профиля
+
+```jsonc
+// ~/.dsh/profiles/<profile>/package.json
+{
+  "dependencies": {
+    "@local/dsh-host-file-explorer": "link:/abs/path/to/dsh-host-file-explorer"
+  }
+}
+```
+
+После установки на боковой панели появляется **значок папки** — после Plugins и Schedules. Щёлкните по нему, чтобы открыть панель.
+
+> **Примечание**: если в вашем профиле есть зависимость, которая поставляет agent skills (например, `dsh-answer-me-with-html`), то pnpm 10.11+ и 12.x отказываются выполнять установку, пока не объявлен каталог skills, и завершаются ошибкой `ERR_PNPM_NO_AGENT_SKILLS_DIR`. Отключите собственное связывание skills в pnpm одной секцией в `pnpm-workspace.yaml` профиля:
+>
+> ```yaml
+> skills:
+>   dirs: []
+> ```
+
+## Архитектура
+
+Этот plugin — стандартный bundle DSH с половиной Host и половиной Client:
+
+```
+index.js   (Host)    ctx.hostFiles  ——  five verbs over node:fs/promises
+client.js  (Client)  sidebar entry + main panel + Remote namespace mount
+```
+
+**Половина Host** предоставляет сервис `ctx.hostFiles` и помечает его методы для транспорта Remote маркером прототипа `@deepseek-ai/dsh-typert-protocol/remote-methods`, чтобы шлюз мог обнаружить его в режиме SRC:
+
+| Метод | Параметры | Возвращает |
+| --- | --- | --- |
+| `roots()` | — | Известные расположения (HOME, tmp, cwd, корень файловой системы) |
+| `list(path, signal)` | `path` | `{ path, parent, home, entries[], truncated }` |
+| `stat(path, signal)` | `path` | `{ path, kind, size, modified }` |
+| `read(path, signal)` | `path` | `{ path, size, modified, binary, truncated, text }` |
+| `mkdir(path, name, signal)` | `path`, `name` | `{ path }` |
+
+`signal` должен быть последним параметром: шлюз разбирает сигнатуру метода с помощью `Function.prototype.toString()`, чтобы определить параметры, передаваемые по каналу, а некорректная сигнатура приводит к сбою вызова.
+
+**Половина Client** вручную описывает вклад Remote в Typert, монтирует его с помощью `ctx.remote.$mount(...)`, а затем регистрирует два слота:
+
+- `sidebar.panellist`: id `host-files`, порядок `30`, со своим значком папки;
+- `main`: key `host-files`, панель, которую открывает кнопка на боковой панели.
+
+### Две ловушки, о которых стоит знать
+
+1. **Пространство имён нельзя объявить собственным inject этого plugin.** Смонтированный `remote.hostFiles` — самостоятельный сервис, и он появляется только после того, как отработает монтирование этого plugin: fiber, который ожидает его, никогда не проснётся, поэтому plugin никогда не запустится. Вместо этого читайте его через `ctx.get('remote.hostFiles')` — точку входа миксина Cordis, которая берёт сервис напрямую из общего хранилища:
+
+   ```js
+   const namespace = ctx.get('remote.hostFiles');
+   ```
+
+   Поставляемые plugin'ы могут указывать `inject: ['remote.agentPresets']` только потому, что эти пространства имён монтирует другой package, и это оставляет потребителю свободу объявить зависимость.
+
+2. **Половина Client не зависит ни от одного клиентского package Harness.** Этот plugin использует только `react` и `zod`, оформляет себя токенами темы `--dsw-alias-*` и ничего не импортирует из `@deepseek-ai/dsh-client-ui-primitives` и его собратьев.
+
+## Разрешения и границы
+
+- Этот plugin читает файловую систему машины Host с **правами самого процесса Harness**: он может прочитать всё, что может прочитать учётная запись, от имени которой он запущен. Это неотъемлемо от сути обозревателя файлов Host, поэтому включайте его только на машинах и учётных записях, которым доверяете.
+- Этот plugin **доступен только для чтения, плюс создание папок**. Он не может записывать файлы, удалять их, переименовывать или изменять их разрешения.
+- Один список возвращает не более 2000 записей, а один предпросмотр читает не более 256 KiB.
+
+## Разработка
+
+```bash
+node --check index.js
+node --check client.js
+npm pack --dry-run      # inspect the file list that actually ships
+```
+
+Во время локальной разработки профиль указывает на рабочий каталог через `link:`, поэтому правка становится видна после обновления страницы в браузере (модуль client версионируется по хешу содержимого).
+
+## Лицензия
+
+MIT, см. [LICENSE](LICENSE).
