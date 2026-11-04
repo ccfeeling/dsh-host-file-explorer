@@ -1,0 +1,249 @@
+/**
+ * Host half of the host file-explorer bundle.
+ *
+ * The service this file registers, `ctx.hostFiles`, answers the four questions
+ * the browser page asks of the machine it runs on: which places are worth a
+ * one-click jump, what one directory holds, what one file contains, and what
+ * one new directory was called. Every method crosses the same Host/Client
+ * Remote boundary the rest of the application uses, so the page reads the host
+ * exactly the way the agent's own filesystem tools do.
+ *
+ * The Gateway learns which of these methods are remotely callable from the
+ * marker the protocol package keeps on the service prototype. This file writes
+ * that marker itself instead of importing the package, so the bundle installs
+ * with no dependency of its own and the marker shape stays pinned to the
+ * protocol version this Harness runs.
+ */
+import { mkdir as makeDirectory, open, readdir, stat as statPath } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join, parse, resolve } from 'node:path';
+
+/**
+ * The slot `@deepseek-ai/dsh-typert-protocol` keeps the Remote markers on.
+ * The Gateway reads this exact descriptor to learn that a Service method may
+ * be called by a remote client; the descriptor's version is the protocol's.
+ */
+const REMOTE_METHODS = '@deepseek-ai/dsh-typert-protocol/remote-methods';
+
+/** The Cordis service key, and the Remote namespace the Gateway exposes it under. */
+const NAMESPACE = 'hostFiles';
+
+/** The largest directory level one listing materializes. */
+const MAX_ENTRIES = 2000;
+
+/** The largest file prefix one preview reads. */
+const MAX_PREVIEW_BYTES = 256 * 1024;
+
+/** The file kind a directory entry carries over the wire. */
+const KIND_FILE = 'file';
+const KIND_DIRECTORY = 'directory';
+const KIND_OTHER = 'other';
+
+/**
+ * The host filesystem service.
+ *
+ * Every method keeps the plain signature the Gateway reads from the source:
+ * business parameters first, an optional `signal` last.
+ */
+class HostFiles {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  /**
+   * The places the page offers as one-click jumps.
+   *
+   * @returns the absolute paths worth jumping to.
+   */
+  async roots() {
+    const seen = new Set();
+    const paths = [];
+    const add = (value) => {
+      if (typeof value !== 'string' || value.length === 0) return;
+      const absolute = resolve(value);
+      if (seen.has(absolute)) return;
+      seen.add(absolute);
+      paths.push(absolute);
+    };
+    add(homedir());
+    add(tmpdir());
+    add(process.cwd());
+    add(parse(process.cwd()).root);
+    return paths;
+  }
+
+  /**
+   * The direct children of one directory, with the metadata the page lists.
+   *
+   * @param path - the directory to list; absent or empty lists the home directory.
+   * @param signal - caller lifetime.
+   * @returns the directory's children, its parent, and whether the level was cut.
+   */
+  async list(path, signal) {
+    const target = await this.resolveDirectory(path);
+    const dirents = await readdir(target, { withFileTypes: true });
+    const entries = [];
+    let truncated = false;
+    for (const dirent of dirents) {
+      if (signal?.aborted === true) throw new Error('the listing was cancelled');
+      if (entries.length >= MAX_ENTRIES) {
+        truncated = true;
+        break;
+      }
+      const child = join(target, dirent.name);
+      let kind = KIND_OTHER;
+      let size;
+      let modified;
+      try {
+        const info = await statPath(child);
+        kind = info.isDirectory() ? KIND_DIRECTORY : info.isFile() ? KIND_FILE : KIND_OTHER;
+        size = info.size;
+        modified = info.mtimeMs;
+      } catch {
+        kind = KIND_OTHER;
+      }
+      entries.push({
+        name: dirent.name,
+        path: child,
+        kind,
+        size,
+        modified,
+        hidden: dirent.name.startsWith('.'),
+      });
+    }
+    entries.sort((left, right) => {
+      if (left.kind !== right.kind) return left.kind === KIND_DIRECTORY ? -1 : 1;
+      return left.name.localeCompare(right.name);
+    });
+    const parent = dirname(target);
+    return {
+      path: target,
+      parent: parent === target ? null : parent,
+      home: homedir(),
+      entries,
+      truncated,
+    };
+  }
+
+  /**
+   * The metadata of one path, without its contents.
+   *
+   * @param path - the file or directory to describe.
+   * @param signal - caller lifetime.
+   * @returns the path's kind, size, and modification time.
+   */
+  async stat(path, signal) {
+    const target = this.resolve(path);
+    if (signal?.aborted === true) throw new Error('the probe was cancelled');
+    const info = await statPath(target);
+    return {
+      path: target,
+      kind: info.isDirectory() ? KIND_DIRECTORY : info.isFile() ? KIND_FILE : KIND_OTHER,
+      size: info.size,
+      modified: info.mtimeMs,
+    };
+  }
+
+  /**
+   * The leading bytes of one text file, decoded for the preview pane.
+   *
+   * @param path - the file to preview.
+   * @param signal - caller lifetime.
+   * @returns the decoded prefix, whether the file is binary, and whether it was cut.
+   */
+  async read(path, signal) {
+    const target = this.resolve(path);
+    const info = await statPath(target);
+    if (!info.isFile()) throw new Error(`"${target}" is not a regular file`);
+    if (signal?.aborted === true) throw new Error('the preview was cancelled');
+    const handle = await open(target, 'r');
+    try {
+      const buffer = Buffer.alloc(MAX_PREVIEW_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, MAX_PREVIEW_BYTES, 0);
+      const prefix = buffer.subarray(0, bytesRead);
+      const binary = prefix.includes(0);
+      return {
+        path: target,
+        size: info.size,
+        modified: info.mtimeMs,
+        binary,
+        truncated: info.size > bytesRead,
+        text: binary ? '' : new TextDecoder('utf-8').decode(prefix),
+      };
+    } finally {
+      await handle.close();
+    }
+  }
+
+  /**
+   * Create one directory inside another.
+   *
+   * @param path - the parent directory.
+   * @param name - the new directory's single path segment.
+   * @param signal - caller lifetime.
+   * @returns the created directory's absolute path.
+   */
+  async mkdir(path, name, signal) {
+    const parent = await this.resolveDirectory(path);
+    if (typeof name !== 'string' || name.trim() === '' || name === '.' || name === '..' || /[/\\]/.test(name)) {
+      throw new Error(`"${String(name)}" is not a single path segment`);
+    }
+    if (signal?.aborted === true) throw new Error('the creation was cancelled');
+    const target = join(parent, name);
+    await makeDirectory(target);
+    return { path: target };
+  }
+
+  /**
+   * One absolute path: a relative one resolves against the process's directory.
+   *
+   * @param path - the path the caller named.
+   * @returns the absolute path.
+   */
+  resolve(path) {
+    if (typeof path !== 'string' || path.trim() === '') return resolve(homedir());
+    return resolve(path);
+  }
+
+  /**
+   * One absolute directory path; a file is not a directory to list.
+   *
+   * @param path - the directory the caller named.
+   * @returns the absolute directory path.
+   */
+  async resolveDirectory(path) {
+    const target = this.resolve(path);
+    const info = await statPath(target);
+    if (!info.isDirectory()) throw new Error(`"${target}" is not a directory`);
+    return target;
+  }
+}
+
+/**
+ * Mark the service's methods as remotely callable.
+ *
+ * The descriptor is the one the protocol package writes for its own `@Remote`
+ * decorator: the method names, and the fact that each is a direct invocation.
+ */
+Object.defineProperty(HostFiles.prototype, REMOTE_METHODS, {
+  configurable: true,
+  value: Object.freeze({
+    version: 1,
+    methods: Object.freeze(
+      ['roots', 'list', 'stat', 'read', 'mkdir'].map((method) =>
+        Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) }),
+      ),
+    ),
+  }),
+});
+
+/**
+ * Register the host filesystem service and its Remote binding.
+ *
+ * @param ctx - the plugin's Host context.
+ */
+export function apply(ctx) {
+  const service = new HostFiles(ctx);
+  service.typertRemote = Object.freeze({ service, serviceKey: NAMESPACE, namespace: NAMESPACE });
+  ctx.provide(NAMESPACE, service);
+}

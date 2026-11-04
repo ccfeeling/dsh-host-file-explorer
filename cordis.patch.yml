@@ -1,0 +1,6 @@
+# The bundle's single Loader row. The Host half registers `ctx.hostFiles`
+# (a Remote-capable service over the machine's filesystem); the Client half
+# registers the sidebar entry and the panel it opens.
+- insert:
+    - id: host-file-explorer
+      name: '@local/dsh-host-file-explorer'

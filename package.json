@@ -1,0 +1,56 @@
+{
+  "name": "@local/dsh-host-file-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Host file explorer: a left-sidebar panel that browses the machine's filesystem, previews text files, and creates folders.",
+  "icon": "./icon.svg",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "license": "MIT",
+  "author": "ccfeeling",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ccfeeling/dsh-host-file-explorer.git"
+  },
+  "homepage": "https://github.com/ccfeeling/dsh-host-file-explorer#readme",
+  "bugs": {
+    "url": "https://github.com/ccfeeling/dsh-host-file-explorer/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "plugin",
+    "file-explorer"
+  ]
+}
